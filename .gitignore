@@ -1,0 +1,55 @@
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/settings.local.json
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Tuist 가 매니페스트에서 생성하는 산출물 — 더 이상 손으로 관리하는 소스가 아닙니다.
+# I 단계는 반대로 .xcodeproj 를 직접 커밋했습니다(글로벌 무시 규칙까지 무력화하면서).
+*.xcodeproj/
+*.xcworkspace/
+Derived/
+Tuist/.build/
+.tuist-version
+
+# Xcode - User-specific
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code injection
+iOSInjectionProject/
+
+# Secrets (API 키) — 로컬에만 두고 커밋하지 않습니다
+Secrets.local.xcconfig
