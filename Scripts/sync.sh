@@ -57,7 +57,7 @@ fi
 if [ "$drift" -eq 0 ]; then
   tuist_count=$(find Projects/*/*/ -maxdepth 0 -type d | grep -cv "Projects/App")
   package_count=$(find Package/*/*/ -maxdepth 0 -type d | wc -l | tr -d ' ')
-  echo "  Tuist $tuist_count개 · Package $package_count개 — 디스크와 매니페스트가 일치합니다."
+  echo "  Tuist ${tuist_count}개 · Package ${package_count}개 — 디스크와 매니페스트가 일치합니다."
 else
   echo
   echo "  선언이 어긋났습니다. 위 항목을 고치고 다시 도세요."
