@@ -1,3 +1,4 @@
+import ConfigurationPlugin
 import EnvironmentPlugin
 import ProjectDescription
 import TargetPlugin
@@ -10,14 +11,16 @@ extension Component {
     .target(
       name: name,
       destinations: env.destinations,
-      product: isTest ? .unitTests : .staticFramework,
-      bundleId: env.bundleId(name),
+      product: isApp ? .app : (isTest ? .unitTests : .staticFramework),
+      bundleId: env.bundleId(isApp ? "example.\(module.rawValue.lowercased())" : name),
       deploymentTargets: env.deploymentTargets,
-      infoPlist: .default,
+      infoPlist: isApp ? env.infoPlist() : .default,
       sources: ["\(sourcePath)"],
       resources: resources,
       dependencies: dependencies.map { $0.dependency(from: modulePath) },
-      settings: .settings(base: env.baseSetting)
+      settings: isApp
+        ? .settings(base: env.appSetting, configurations: ConfigurationType.configurations())
+        : .settings(base: env.baseSetting)
     )
   }
 }

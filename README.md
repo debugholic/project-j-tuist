@@ -37,10 +37,13 @@ Workspace.swift                           프로젝트 13개 + 스킴 4개
 Makefile                                  generate · sync · clean · test · module
 Configurations/                           Debug.xcconfig · Release.xcconfig
 
+Package/Tool/SyncModules                  디렉터리 → 선언 생성기
+
 Plugins/                                  ← 서로를 모릅니다
-├── EnvironmentPlugin/                    ProjectEnvironment (이름 · 배포 타깃 · 공통 설정)
+├── EnvironmentPlugin/                    ProjectEnvironment (이름 · 배포 타깃 · plist 기본값)
 ├── ConfigurationPlugin/                  ConfigurationType (Debug · Release ↔ xcconfig)
-├── TargetPlugin/                         Component · Module · ModuleDependency
+├── TargetPlugin/                         Component · ModuleDependency · Dependencies
+│   └── .generated/Modules.swift          ← 생성물, 커밋 안 함
 └── TemplatePlugin/                       tuist scaffold Module
 
 Tuist/ProjectDescriptionHelpers/          ← 플러그인을 import 해 조합하는 유일한 층
@@ -174,6 +177,32 @@ public func target(_ env: ProjectEnvironment) -> Target { ... }
 
 다음 단계로 넘어갈 때 바꿀 값은 `Tuist/ProjectDescriptionHelpers/Environment.swift` 의 `name` 과 `bundleIdPrefix` 두 줄입니다.
 
+## 선언은 디렉터리에서 생성한다
+
+모듈을 하나 늘릴 때 손으로 고칠 곳이 많으면 어딘가는 빠집니다. **어떤 모듈이 있고 어떤 타깃이 있는지는 디스크에 이미 적혀 있으니, 읽어서 생성합니다.**
+
+```
+Package/Tool/SyncModules          디렉터리 스캐너 (swift run)
+        ↓
+Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated/Modules.swift
+        Module 열거형 · ScannedTarget 목록      ← AUTO-GENERATED, 커밋 안 함
+```
+
+`Interface/Sources` 가 있으면 Interface 타깃이 생기고, `Example/Sources` 가 있으면 Example 앱이 생깁니다. 디렉터리가 없으면 그 타깃도 없습니다 — `Domain/Reservation` 에 구현 타깃이 없는 것도 그래서입니다.
+
+**생성되지 않는 것은 의존성 그래프 하나뿐입니다.** 무엇이 무엇에 기대는지는 디렉터리에 적혀 있지 않습니다. `Dependencies.swift` 에 손으로 남습니다.
+
+```
+make module NAME=Payment LAYER=Feature   # 디렉터리 + Project.swift
+make sync                                # 스캔 → 타깃 4개 생성
+  모듈 10개 · 타깃 43개 — 디스크에서 생성했습니다.
+  ! Feature/Payment — 의존성이 비어 있습니다
+```
+
+선언은 한 줄도 손대지 않았는데 `FeaturePayment` · `…Interface` · `…Testing` · `…Tests` 가 생깁니다. 남은 일은 의존성을 채우는 것뿐이고, 그것도 비어 있으면 `sync` 가 알려줍니다.
+
+`sync` 는 생성 뒤에 세 가지를 더 봅니다 — 모듈 디렉터리에 `Project.swift` 가 있는지, 의존성이 비어 있지 않은지, 그리고 `Package/` 에 `import UIKit` 이 섞이지 않았는지(섞이면 `swift test` 가 macOS 에서 깨집니다).
+
 ## 모듈 뼈대는 찍어낸다
 
 I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 `Project.swift` 까지 같이 찍어냅니다.
@@ -192,11 +221,7 @@ Projects/Feature/Payment/Testing/Sources/PaymentTesting.swift
 Projects/Feature/Payment/Tests/Sources/PaymentTests.swift
 ```
 
-의존성 선언만 `Module.swift` 에 손으로 추가하면 됩니다. 그걸 빠뜨리면 모듈이 조용히 빌드에서 빠지므로, `make sync` 가 디스크와 매니페스트를 대조해 잡습니다 — `make generate` 가 생성 전에 먼저 돌립니다.
-
-```
-✗ Feature/Payment — 매니페스트에 선언이 없습니다
-```
+타깃은 `make sync` 가 스캔해서 잡습니다. 남는 일은 `Dependencies.swift` 에 의존성을 채우는 것뿐입니다.
 
 ## 이번에 걸린 것
 
@@ -225,7 +250,7 @@ I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파�
 ProjectJ.xcworkspace        ← make generate 산출물 (커밋 안 함)
 Makefile                    진입점
 Configurations/             Debug.xcconfig · Release.xcconfig
-Scripts/sync.sh             디스크 ↔ 매니페스트 정합성 검사
+Scripts/sync.sh             생성 후 남은 어긋남 검사
 Plugins/                    Environment · Configuration · Target · Template
 Tuist/ProjectDescriptionHelpers/
 Package/                    UIKit 없는 모듈 — swift test 로 검증
@@ -282,7 +307,7 @@ make generate
 | | |
 |---|---|
 | `make generate` | 플러그인 해석 → `sync` → 프로젝트 생성 |
-| `make sync` | 디스크의 모듈과 매니페스트 선언이 맞는지 검사 |
+| `make sync` | 디렉터리에서 모듈·타깃 선언을 생성하고 검사 |
 | `make open` | 생성 후 Xcode 로 열기 |
 | `make clean` | 생성물(`.xcodeproj` · `.xcworkspace` · `Derived`)만 삭제 |
 | `make test` | 패키지(`swift test`) + 앱 스킴 테스트 |

@@ -20,6 +20,7 @@ xcuserdata/
 Derived/
 Tuist/.build/
 Tuist/Plugins/
+Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated/
 .tuist-version
 
 # Xcode - User-specific

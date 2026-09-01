@@ -1,132 +1,90 @@
 import Foundation
 import ProjectDescription
 
-// MARK: - Component
+/// 타깃 한 조각입니다.
+///
+/// 이름 · 경로 · 슬롯은 **디스크에서 옵니다**(`.generated/Modules.swift`).
+/// 의존성만 손으로 적습니다(`Dependencies.swift`) — 디렉터리 구조로는
+/// 무엇이 무엇에 기대는지 알 수 없기 때문입니다.
+public struct Component {
+  public let root: ModuleRoot
+  public let layer: ModuleLayer
+  public let module: Module
+  public let slot: ModuleSlot
 
-public enum Component {
-  public enum Core: String, CaseIterable {
-    case network = "Network"
-    case storage = "Storage"
-    case travelGuide = "TravelGuide"
+  public init(_ scanned: ScannedTarget) {
+    self.root = scanned.root
+    self.layer = scanned.layer
+    self.module = scanned.module
+    self.slot = scanned.slot
   }
 
-  public enum Shared: String, CaseIterable {
-    case common = "Common"
-    case designSystem = "DesignSystem"
-  }
-
-  /// Core 와 SharedCommon 은 `Package/` 로 갔습니다. 여기 남는 Shared 는
-  /// UIKit 을 쓰는 DesignSystem 뿐입니다.
-  case shared(_ component: Shared, dependencies: [ModuleDependency] = [])
-
-  case domainInterface(_ module: Module, dependencies: [ModuleDependency] = [])
-  case domain(_ module: Module, dependencies: [ModuleDependency] = [])
-  case domainTesting(_ module: Module, dependencies: [ModuleDependency] = [])
-  case domainTests(_ module: Module, dependencies: [ModuleDependency] = [])
-
-  case dataInterface(_ module: Module, dependencies: [ModuleDependency] = [])
-  case data(_ module: Module, dependencies: [ModuleDependency] = [])
-  case dataTests(_ module: Module, dependencies: [ModuleDependency] = [])
-
-  case featureInterface(_ module: Module, dependencies: [ModuleDependency] = [])
-  case feature(_ module: Module, dependencies: [ModuleDependency] = [])
-  case featureTesting(_ module: Module, dependencies: [ModuleDependency] = [])
-  case featureTests(_ module: Module, dependencies: [ModuleDependency] = [])
-
+  /// `DomainTripInterface`
   public var name: String {
-    switch self {
-    case .shared(let component, _): "Shared\(component.rawValue)"
-    case .domainInterface(let module, _): "Domain\(module.rawValue)Interface"
-    case .domain(let module, _): "Domain\(module.rawValue)"
-    case .domainTesting(let module, _): "Domain\(module.rawValue)Testing"
-    case .domainTests(let module, _): "Domain\(module.rawValue)Tests"
-    case .dataInterface(let module, _): "Data\(module.rawValue)Interface"
-    case .data(let module, _): "Data\(module.rawValue)"
-    case .dataTests(let module, _): "Data\(module.rawValue)Tests"
-    case .featureInterface(let module, _): "Feature\(module.rawValue)Interface"
-    case .feature(let module, _): "Feature\(module.rawValue)"
-    case .featureTesting(let module, _): "Feature\(module.rawValue)Testing"
-    case .featureTests(let module, _): "Feature\(module.rawValue)Tests"
-    }
+    "\(layer.rawValue)\(module.rawValue)\(slot.suffix)"
   }
 
-  /// 모듈 디렉터리. 프로젝트 하나의 단위입니다. 예: `Domain/Trip`
+  /// `Domain/Trip` — 프로젝트 하나의 단위입니다.
   public var modulePath: String {
-    switch self {
-    case .shared(let c, _): "Shared/\(c.rawValue)"
-    case .domainInterface(let m, _), .domain(let m, _),
-      .domainTesting(let m, _), .domainTests(let m, _):
-      "Domain/\(m.rawValue)"
-    case .dataInterface(let m, _), .data(let m, _), .dataTests(let m, _):
-      "Data/\(m.rawValue)"
-    case .featureInterface(let m, _), .feature(let m, _),
-      .featureTesting(let m, _), .featureTests(let m, _):
-      "Feature/\(m.rawValue)"
-    }
+    "\(layer.rawValue)/\(module.rawValue)"
   }
 
-  /// 모듈 디렉터리 안에서 이 조각이 앉는 자리.
-  public var slot: String {
-    switch self {
-    case .shared, .domain, .data, .feature: ""
-    case .domainInterface, .dataInterface, .featureInterface: "Interface"
-    case .domainTesting, .featureTesting: "Testing"
-    case .domainTests, .dataTests, .featureTests: "Tests"
-    }
-  }
-
-  /// 프로젝트 디렉터리 기준 소스 경로.
-  public var sourcePath: String {
-    slot.isEmpty ? "Sources/**" : "\(slot)/Sources/**"
-  }
-
-  public var resourcePath: String {
-    slot.isEmpty ? "Resources/**" : "\(slot)/Resources/**"
-  }
+  public var sourcePath: String { slot.sourcePath }
+  public var isTest: Bool { slot.isTest }
+  public var isApp: Bool { slot.isApp }
 
   public var dependencies: [ModuleDependency] {
-    switch self {
-    case .shared(_, let dependencies),
-      .domainInterface(_, let dependencies),
-      .domain(_, let dependencies),
-      .domainTesting(_, let dependencies),
-      .domainTests(_, let dependencies),
-      .dataInterface(_, let dependencies),
-      .data(_, let dependencies),
-      .dataTests(_, let dependencies),
-      .featureInterface(_, let dependencies),
-      .feature(_, let dependencies),
-      .featureTesting(_, let dependencies),
-      .featureTests(_, let dependencies):
-      dependencies
-    }
+    module.dependencies(layer, slot)
   }
 
-  public var isTest: Bool {
-    switch self {
-    case .domainTests, .dataTests, .featureTests: true
-    default: false
-    }
+  /// 이 조각이 패키지 product 를 쓰는지. 쓰면 프로젝트가 패키지를 참조해야 합니다.
+  public var usesPackage: Bool {
+    dependencies.contains(where: \.isPackage)
   }
 
   public var resources: ResourceFileElements? {
-    exists(slot.isEmpty ? "Resources" : "\(slot)/Resources")
-      ? ["\(resourcePath)"] : nil
+    exists(slot.resourceDirectory)
+      ? ["\(slot.resourceDirectory)/**"] : nil
   }
 
   private func exists(_ directory: String) -> Bool {
     FileManager.default.fileExists(
-      atPath: Self.projectsRoot.appending("/\(modulePath)/\(directory)")
+      atPath: "\(Self.repositoryRoot)/\(root.rawValue)/\(modulePath)/\(directory)"
     )
   }
 
   /// 플러그인은 `<root>/Plugins/TargetPlugin/ProjectDescriptionHelpers` 에서
   /// 컴파일되므로 세 단계 올라가면 리포 루트입니다.
-  private static let projectsRoot: String = URL(fileURLWithPath: #filePath)
+  private static let repositoryRoot: String = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()  // ProjectDescriptionHelpers
     .deletingLastPathComponent()  // TargetPlugin
     .deletingLastPathComponent()  // Plugins
     .deletingLastPathComponent()  // <root>
-    .appendingPathComponent("Projects")
     .path
+}
+
+// MARK: - Lookup
+
+extension Module {
+  /// Tuist 가 만드는 타깃만. `Package/` 쪽은 SwiftPM 이 맡습니다.
+  public static var allComponents: [Component] {
+    scanned.filter { $0.root == .projects }.map(Component.init)
+  }
+
+  /// 워크스페이스에 올릴 모듈 프로젝트 경로입니다. 스캔 순서를 지킵니다.
+  public static var modulePaths: [String] {
+    var seen: Set<String> = []
+    return allComponents.map(\.modulePath).filter { seen.insert($0).inserted }
+  }
+
+  public static func components(at modulePath: String) -> [Component] {
+    allComponents.filter { $0.modulePath == modulePath }
+  }
+
+  /// `Package/` 에 있는지. 의존성을 `.package(product:)` 로 풀지 가릅니다.
+  public static func isPackage(_ layer: ModuleLayer, _ module: Module) -> Bool {
+    scanned.contains {
+      $0.root == .package && $0.layer == layer && $0.module == module
+    }
+  }
 }

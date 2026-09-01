@@ -8,7 +8,7 @@ private let env = projectJ
 let project = Project(
   name: "App",
   options: .options(automaticSchemesOptions: .disabled),
-  packages: [.package],
+  packages: [.local],
   settings: .settings(
     base: env.appSetting,
     configurations: ConfigurationType.configurations()
@@ -20,7 +20,7 @@ let project = Project(
       product: .app,
       bundleId: env.bundleId("app"),
       deploymentTargets: env.deploymentTargets,
-      infoPlist: .extendingDefault(with: [
+      infoPlist: env.infoPlist([
         "RapidAPIKey": "$(RAPIDAPI_KEY)",
         "UIApplicationSceneManifest": [
           "UIApplicationSupportsMultipleScenes": false,

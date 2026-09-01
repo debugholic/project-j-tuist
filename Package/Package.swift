@@ -14,6 +14,8 @@ enum Component: CaseIterable {
   case coreTravelGuideTests
   case sharedCommon
   case sharedCommonTesting
+  /// 디렉터리를 읽어 모듈 선언을 생성하는 도구. iOS 산출물이 아닙니다.
+  case syncModules
 
   var name: String {
     switch self {
@@ -23,6 +25,7 @@ enum Component: CaseIterable {
     case .coreTravelGuideTests: "CoreTravelGuideTests"
     case .sharedCommon: "SharedCommon"
     case .sharedCommonTesting: "SharedCommonTesting"
+    case .syncModules: "SyncModules"
     }
   }
 
@@ -34,6 +37,7 @@ enum Component: CaseIterable {
     case .coreTravelGuideTests: "Core/TravelGuide/Tests"
     case .sharedCommon: "Shared/Common"
     case .sharedCommonTesting: "Shared/Common/Testing"
+    case .syncModules: "Tool/SyncModules"
     }
   }
 
@@ -52,8 +56,15 @@ enum Component: CaseIterable {
     }
   }
 
-  /// 이 모듈이 product 로 나가는지. 테스트 타깃은 안 나갑니다.
-  var isProduct: Bool { !isTest }
+  var isTool: Bool {
+    switch self {
+    case .syncModules: true
+    default: false
+    }
+  }
+
+  /// 이 모듈이 라이브러리 product 로 나가는지. 테스트와 도구는 안 나갑니다.
+  var isProduct: Bool { !isTest && !isTool }
 
   var resources: [Resource] {
     let full = URL(fileURLWithPath: #filePath)
@@ -72,7 +83,11 @@ enum Component: CaseIterable {
   }
 
   var target: Target {
-    isTest
+    if isTool {
+      return .executableTarget(name: name, path: path, sources: ["Sources"])
+    }
+
+    return isTest
       ? .testTarget(
         name: name,
         dependencies: dependencies,
@@ -96,6 +111,7 @@ let package = Package(
   platforms: [.iOS(.v16), .macOS(.v13)],
   products: Component.allCases
     .filter(\.isProduct)
-    .map { .library(name: $0.name, targets: [$0.name]) },
+    .map { .library(name: $0.name, targets: [$0.name]) }
+    + [.executable(name: "SyncModules", targets: ["SyncModules"])],
   targets: Component.allCases.map(\.target)
 )
