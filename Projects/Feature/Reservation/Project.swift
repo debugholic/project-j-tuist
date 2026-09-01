@@ -2,16 +2,16 @@ import ProjectDescription
 import ProjectDescriptionHelpers
 import TargetPlugin
 
-let project = Project.example(
+let project = Project.feature(
   .reservation,
-  dependencies: [
-    "CoreStorage",
-    "DataTrip",
-    "DomainReservationInterface",
-    "DomainReservationTesting",
-    "DomainTrip",
-    "DomainTripInterface",
-    "FeatureReservation",
-    "FeatureReservationInterface",
+  example: [
+    .core(.storage),
+    .data(.trip),
+    .domainInterface(.reservation),
+    .domainTesting(.reservation),
+    .domain(.trip),
+    .domainInterface(.trip),
+    .feature(.reservation),
+    .featureInterface(.reservation),
   ]
 )

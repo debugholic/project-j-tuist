@@ -15,24 +15,24 @@ public enum Component {
     case designSystem = "DesignSystem"
   }
 
-  case core(_ component: Core, dependencies: [TargetDependency] = [])
-  case coreTests(_ component: Core, dependencies: [TargetDependency] = [])
-  case shared(_ component: Shared, dependencies: [TargetDependency] = [])
-  case sharedTesting(_ component: Shared, dependencies: [TargetDependency] = [])
+  case core(_ component: Core, dependencies: [ModuleDependency] = [])
+  case coreTests(_ component: Core, dependencies: [ModuleDependency] = [])
+  case shared(_ component: Shared, dependencies: [ModuleDependency] = [])
+  case sharedTesting(_ component: Shared, dependencies: [ModuleDependency] = [])
 
-  case domainInterface(_ module: Module, dependencies: [TargetDependency] = [])
-  case domain(_ module: Module, dependencies: [TargetDependency] = [])
-  case domainTesting(_ module: Module, dependencies: [TargetDependency] = [])
-  case domainTests(_ module: Module, dependencies: [TargetDependency] = [])
+  case domainInterface(_ module: Module, dependencies: [ModuleDependency] = [])
+  case domain(_ module: Module, dependencies: [ModuleDependency] = [])
+  case domainTesting(_ module: Module, dependencies: [ModuleDependency] = [])
+  case domainTests(_ module: Module, dependencies: [ModuleDependency] = [])
 
-  case dataInterface(_ module: Module, dependencies: [TargetDependency] = [])
-  case data(_ module: Module, dependencies: [TargetDependency] = [])
-  case dataTests(_ module: Module, dependencies: [TargetDependency] = [])
+  case dataInterface(_ module: Module, dependencies: [ModuleDependency] = [])
+  case data(_ module: Module, dependencies: [ModuleDependency] = [])
+  case dataTests(_ module: Module, dependencies: [ModuleDependency] = [])
 
-  case featureInterface(_ module: Module, dependencies: [TargetDependency] = [])
-  case feature(_ module: Module, dependencies: [TargetDependency] = [])
-  case featureTesting(_ module: Module, dependencies: [TargetDependency] = [])
-  case featureTests(_ module: Module, dependencies: [TargetDependency] = [])
+  case featureInterface(_ module: Module, dependencies: [ModuleDependency] = [])
+  case feature(_ module: Module, dependencies: [ModuleDependency] = [])
+  case featureTesting(_ module: Module, dependencies: [ModuleDependency] = [])
+  case featureTests(_ module: Module, dependencies: [ModuleDependency] = [])
 
   public var name: String {
     switch self {
@@ -54,27 +54,42 @@ public enum Component {
     }
   }
 
-  public var path: String {
+  /// 모듈 디렉터리. 프로젝트 하나의 단위입니다. 예: `Domain/Trip`
+  public var modulePath: String {
     switch self {
-    case .core(let component, _): "Core/\(component.rawValue)"
-    case .coreTests(let component, _): "Core/\(component.rawValue)/Tests"
-    case .shared(let component, _): "Shared/\(component.rawValue)"
-    case .sharedTesting(let component, _): "Shared/\(component.rawValue)/Testing"
-    case .domainInterface(let module, _): "Domain/\(module.rawValue)/Interface"
-    case .domain(let module, _): "Domain/\(module.rawValue)"
-    case .domainTesting(let module, _): "Domain/\(module.rawValue)/Testing"
-    case .domainTests(let module, _): "Domain/\(module.rawValue)/Tests"
-    case .dataInterface(let module, _): "Data/\(module.rawValue)/Interface"
-    case .data(let module, _): "Data/\(module.rawValue)"
-    case .dataTests(let module, _): "Data/\(module.rawValue)/Tests"
-    case .featureInterface(let module, _): "Feature/\(module.rawValue)/Interface"
-    case .feature(let module, _): "Feature/\(module.rawValue)"
-    case .featureTesting(let module, _): "Feature/\(module.rawValue)/Testing"
-    case .featureTests(let module, _): "Feature/\(module.rawValue)/Tests"
+    case .core(let c, _), .coreTests(let c, _): "Core/\(c.rawValue)"
+    case .shared(let c, _), .sharedTesting(let c, _): "Shared/\(c.rawValue)"
+    case .domainInterface(let m, _), .domain(let m, _),
+      .domainTesting(let m, _), .domainTests(let m, _):
+      "Domain/\(m.rawValue)"
+    case .dataInterface(let m, _), .data(let m, _), .dataTests(let m, _):
+      "Data/\(m.rawValue)"
+    case .featureInterface(let m, _), .feature(let m, _),
+      .featureTesting(let m, _), .featureTests(let m, _):
+      "Feature/\(m.rawValue)"
     }
   }
 
-  public var dependencies: [TargetDependency] {
+  /// 모듈 디렉터리 안에서 이 조각이 앉는 자리.
+  public var slot: String {
+    switch self {
+    case .core, .shared, .domain, .data, .feature: ""
+    case .domainInterface, .dataInterface, .featureInterface: "Interface"
+    case .sharedTesting, .domainTesting, .featureTesting: "Testing"
+    case .coreTests, .domainTests, .dataTests, .featureTests: "Tests"
+    }
+  }
+
+  /// 프로젝트 디렉터리 기준 소스 경로.
+  public var sourcePath: String {
+    slot.isEmpty ? "Sources/**" : "\(slot)/Sources/**"
+  }
+
+  public var resourcePath: String {
+    slot.isEmpty ? "Resources/**" : "\(slot)/Resources/**"
+  }
+
+  public var dependencies: [ModuleDependency] {
     switch self {
     case .core(_, let dependencies),
       .coreTests(_, let dependencies),
@@ -103,22 +118,23 @@ public enum Component {
   }
 
   public var resources: ResourceFileElements? {
-    exists("Resources") ? ["\(path)/Resources/**"] : nil
+    exists(slot.isEmpty ? "Resources" : "\(slot)/Resources")
+      ? ["\(resourcePath)"] : nil
   }
 
   private func exists(_ directory: String) -> Bool {
     FileManager.default.fileExists(
-      atPath: Self.modulesRoot.appending("/\(path)/\(directory)")
+      atPath: Self.projectsRoot.appending("/\(modulePath)/\(directory)")
     )
   }
 
   /// 플러그인은 `<root>/Plugins/TargetPlugin/ProjectDescriptionHelpers` 에서
   /// 컴파일되므로 세 단계 올라가면 리포 루트입니다.
-  private static let modulesRoot: String = URL(fileURLWithPath: #filePath)
+  private static let projectsRoot: String = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()  // ProjectDescriptionHelpers
     .deletingLastPathComponent()  // TargetPlugin
     .deletingLastPathComponent()  // Plugins
     .deletingLastPathComponent()  // <root>
-    .appendingPathComponent("Modules")
+    .appendingPathComponent("Projects")
     .path
 }

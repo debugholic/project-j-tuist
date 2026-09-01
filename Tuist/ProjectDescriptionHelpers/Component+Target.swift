@@ -14,9 +14,9 @@ extension Component {
       bundleId: env.bundleId(name),
       deploymentTargets: env.deploymentTargets,
       infoPlist: .default,
-      sources: ["\(path)/Sources/**"],
+      sources: ["\(sourcePath)"],
       resources: resources,
-      dependencies: dependencies,
+      dependencies: dependencies.map { $0.dependency(from: modulePath) },
       settings: .settings(base: env.baseSetting)
     )
   }

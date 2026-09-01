@@ -305,3 +305,21 @@ public enum Module: String, CaseIterable {
     }
   }
 }
+
+// MARK: - Lookup
+
+extension Module {
+  public static var allComponents: [Component] {
+    allCases.flatMap(\.components)
+  }
+
+  /// 워크스페이스에 올릴 모듈 프로젝트 경로 목록입니다. 선언 순서를 지킵니다.
+  public static var modulePaths: [String] {
+    var seen: Set<String> = []
+    return allComponents.map(\.modulePath).filter { seen.insert($0).inserted }
+  }
+
+  public static func components(at modulePath: String) -> [Component] {
+    allComponents.filter { $0.modulePath == modulePath }
+  }
+}

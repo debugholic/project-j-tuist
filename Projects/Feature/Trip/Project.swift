@@ -2,15 +2,15 @@ import ProjectDescription
 import ProjectDescriptionHelpers
 import TargetPlugin
 
-let project = Project.example(
+let project = Project.feature(
   .trip,
-  dependencies: [
-    "CoreStorage",
-    "DataTrip",
-    "DomainTrip",
-    "DomainTripInterface",
-    "DomainTripTesting",
-    "FeatureTrip",
-    "FeatureTripInterface",
+  example: [
+    .core(.storage),
+    .data(.trip),
+    .domain(.trip),
+    .domainInterface(.trip),
+    .domainTesting(.trip),
+    .feature(.trip),
+    .featureInterface(.trip),
   ]
 )

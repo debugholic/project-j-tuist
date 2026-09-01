@@ -1,24 +1,20 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
+import TargetPlugin
 
 let workspace = Workspace(
   name: "ProjectJ",
-  projects: [
-    "Modules",
-    "Projects/App",
-    "Projects/Feature/Itinerary",
-    "Projects/Feature/Reservation",
-    "Projects/Feature/Trip",
-  ],
+  projects: ["Projects/App"]
+    + Module.modulePaths.map { "Projects/\($0)" },
   schemes: [
     .app(
       name: "App",
-      project: "Projects/App",
+      project: .relativeToRoot("Projects/App"),
       target: "App",
-      tests: ["CoreTravelGuideTests"]
+      tests: [.coreTests(.travelGuide)]
     ),
-    .example(.itinerary, tests: ["DomainItineraryTests", "FeatureItineraryTests"]),
-    .example(.reservation, tests: ["FeatureReservationTests"]),
-    .example(.trip, tests: ["DomainTripTests", "FeatureTripTests"]),
+    .example(.itinerary, tests: [.domainTests(.itinerary), .featureTests(.itinerary)]),
+    .example(.reservation, tests: [.featureTests(.reservation)]),
+    .example(.trip, tests: [.domainTests(.trip), .featureTests(.trip)]),
   ]
 )

@@ -33,24 +33,24 @@ J는 다섯 개를 전부 매니페스트로 바꿉니다.
 
 ```
 Tuist.swift                               플러그인 4개 선언
-Workspace.swift                           프로젝트 5개 + 스킴 4개
+Workspace.swift                           프로젝트 17개 + 스킴 4개
+Makefile                                  generate · sync · clean · test · module
 Configurations/                           Debug.xcconfig · Release.xcconfig
 
 Plugins/                                  ← 서로를 모릅니다
 ├── EnvironmentPlugin/                    ProjectEnvironment (이름 · 배포 타깃 · 공통 설정)
 ├── ConfigurationPlugin/                  ConfigurationType (Debug · Release ↔ xcconfig)
-├── TargetPlugin/                         Component · Module · 의존성/참조 DSL
+├── TargetPlugin/                         Component · Module · ModuleDependency
 └── TemplatePlugin/                       tuist scaffold Module
 
 Tuist/ProjectDescriptionHelpers/          ← 플러그인을 import 해 조합하는 유일한 층
 ├── Environment.swift                     이 프로젝트의 ProjectEnvironment 값
 ├── Component+Target.swift                Component + 환경값 → Target
-├── Project+Example.swift                 Example 앱 프로젝트 팩토리
+├── Project+Module.swift                  모듈 프로젝트 · Feature 프로젝트 팩토리
 └── Scheme+Workspace.swift                워크스페이스 스킴 팩토리
 
-Modules/Project.swift                     36개 타깃 (Package.swift 자리)
+Projects/<Layer>/<Module>/Project.swift   모듈마다 한 줄
 Projects/App/Project.swift                앱
-Projects/Feature/*/Project.swift          Example 앱 3개
 ```
 
 `.xcodeproj` 와 `.xcworkspace` 는 이제 **커밋하지 않는 빌드 산출물**입니다. `tuist generate` 가 만듭니다.
@@ -61,7 +61,9 @@ I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃�
 
 | | I (SPM) | J (Tuist) |
 |---|---|---|
-| 선언 위치 | `Modules/Package.swift` | `Tuist/ProjectDescriptionHelpers/` |
+| 선언 위치 | `Modules/Package.swift` | `Plugins/TargetPlugin/` |
+| 소스 위치 | `Modules/<Layer>/<Module>` | `Projects/<Layer>/<Module>` |
+| 프로젝트 | 패키지 1개 + xcodeproj 4개 | 프로젝트 17개 |
 | 타깃 한 조각 | `PackageDescription.Target` | `ProjectDescription.Target` |
 | 의존성 | `.byName(name:)` | `.target(name:)` |
 | 산출물 | `.library` product 6개 | `.staticFramework` 타깃 |
@@ -71,7 +73,41 @@ I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃�
 
 `Product` enum 만 `Module` 로 이름을 바꿨습니다 — `ProjectDescription` 에 이미 `Product`(`.app`/`.staticFramework`/`.unitTests`)가 있어서 충돌합니다.
 
-**앱 코드는 한 줄도 안 바뀝니다.** `Modules/` 아래 Swift 파일 140개가 I와 바이트 단위로 같습니다. `Bundle.module` 도 그대로 씁니다 — SPM이 만들어주던 접근자를 Tuist가 똑같이 만들어줍니다.
+**앱 코드는 한 줄도 안 바뀝니다.** `Projects/` 로 옮겨간 Swift 파일 140개가 I의 `Modules/` 와 바이트 단위로 같습니다. `Bundle.module` 도 그대로 씁니다 — SPM이 만들어주던 접근자를 Tuist가 똑같이 만들어줍니다.
+
+## 모듈 하나가 프로젝트 하나다
+
+I는 소스를 `Modules/` 에, Example 앱을 `Projects/` 에 나눠 뒀습니다. 같은 모듈의 조각이 두 군데로 갈라져 있었던 셈입니다.
+
+J는 `Projects/<Layer>/<Module>` 한 곳으로 모으고, **그 디렉터리 하나가 Tuist 프로젝트 하나**가 됩니다.
+
+```
+Projects/Feature/Trip/
+├── Project.swift          FeatureTripInterface · FeatureTrip · …Testing · …Tests · …Example
+├── Interface/Sources
+├── Sources
+├── Testing/Sources
+├── Tests/Sources
+└── Example/Sources        ← I 에서 별도 .xcodeproj 였던 것
+```
+
+`Project.swift` 는 한 줄입니다. 타깃 구성은 `Module.swift` 의 선언에서 나옵니다.
+
+```swift
+let project = Project.module("Domain/Trip")
+```
+
+**프로젝트가 갈라지면 의존성 표현이 달라집니다.** 같은 프로젝트 안이면 `.target(name:)`, 다른 프로젝트면 `.project(target:path:)` 여야 하는데, 어느 쪽인지는 *누가 의존하는지* 를 알아야 정해집니다. `DomainTrip → DomainTripInterface` 는 같은 프로젝트지만 `DataTrip → DomainTripInterface` 는 아닙니다.
+
+그래서 의존성을 `TargetDependency` 로 바로 쓰지 않고 `ModuleDependency` 라는 값으로 들고 있다가, 타깃을 만드는 시점에 소유자와 비교해 풉니다.
+
+```swift
+// 선언 — 어느 쪽인지 아직 모름
+.domainInterface(.trip)
+
+// 타깃 생성 시점에 결정
+owner == modulePath ? .target(name:) : .project(target:path:)
+```
 
 ## 플러그인은 서로를 import 할 수 없다
 
@@ -101,7 +137,7 @@ public func target(_ env: ProjectEnvironment) -> Target { ... }
 
 ## 모듈 뼈대는 찍어낸다
 
-I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 대신합니다.
+I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 `Project.swift` 까지 같이 찍어냅니다.
 
 ```
 make module NAME=Payment LAYER=Feature
@@ -110,30 +146,35 @@ make module NAME=Payment LAYER=Feature
 템플릿 이름은 디렉터리명을 따라 대문자 `Module` 입니다 — `tuist scaffold Module --name …` 을 그대로 부릅니다.
 
 ```
-Modules/Feature/Payment/Sources/Payment.swift
-Modules/Feature/Payment/Interface/Sources/PaymentInterface.swift
-Modules/Feature/Payment/Testing/Sources/PaymentTesting.swift
-Modules/Feature/Payment/Tests/Sources/PaymentTests.swift
+Projects/Feature/Payment/Project.swift
+Projects/Feature/Payment/Sources/Payment.swift
+Projects/Feature/Payment/Interface/Sources/PaymentInterface.swift
+Projects/Feature/Payment/Testing/Sources/PaymentTesting.swift
+Projects/Feature/Payment/Tests/Sources/PaymentTests.swift
 ```
 
-의존성 선언만 `Plugins/TargetPlugin/ProjectDescriptionHelpers/Module.swift` 에 손으로 추가하면 됩니다.
+의존성 선언만 `Module.swift` 에 손으로 추가하면 됩니다. 그걸 빠뜨리면 모듈이 조용히 빌드에서 빠지므로, `make sync` 가 디스크와 매니페스트를 대조해 잡습니다 — `make generate` 가 생성 전에 먼저 돌립니다.
+
+```
+✗ Feature/Payment — 매니페스트에 선언이 없습니다
+```
 
 ## 이번에 걸린 것
 
 **1. 프로젝트 간 스킴은 워크스페이스만 선언할 수 있습니다.**
 
-I의 스킴은 Example 앱(= `Projects/`)과 테스트 타깃(= `Modules/`)을 같이 물고 있었습니다. 이걸 `Projects/Feature/Trip/Project.swift` 의 `schemes:` 에 넣으면 린트에서 막힙니다.
+`App` 스킴은 앱 타깃(`Projects/App`)과 테스트 타깃(`Projects/Core/TravelGuide`)을 같이 뭅니다. 이걸 프로젝트 매니페스트의 `schemes:` 에 넣으면 린트에서 막힙니다.
 
 ```
-The target 'DomainTripTests' specified in scheme 'FeatureTripExample'
-is not defined in the project named 'FeatureTrip'.
+The target 'CoreTravelGuideTests' specified in scheme 'App'
+is not defined in the project named 'App'.
 ```
 
-스킴 4개를 전부 `Workspace.swift` 로 올려서 해결했습니다. 프로젝트 매니페스트는 타깃만 선언합니다.
+스킴 4개를 전부 `Workspace.swift` 로 올려서 해결했습니다. 프로젝트 매니페스트는 타깃만 선언합니다. (Example 스킴은 모듈을 합치면서 같은 프로젝트가 됐지만, 일관성을 위해 넷 다 워크스페이스에 둡니다.)
 
 **2. 자동 생성 스킴과 이름이 겹칩니다.**
 
-Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스킴이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 앱 프로젝트 4개에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다. `Modules` 프로젝트는 켜 둡니다(모듈 하나만 빌드할 때 씁니다).
+Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스킴이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 프로젝트 17개 전부에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다.
 
 **3. `INFOPLIST_FILE` 은 이제 `Config.xcconfig` 가 아니라 매니페스트가 정합니다.**
 
@@ -144,17 +185,17 @@ I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파�
 ```
 ProjectJ.xcworkspace        ← make generate 산출물 (커밋 안 함)
 Makefile                    진입점
-Tuist.swift · Workspace.swift
 Configurations/             Debug.xcconfig · Release.xcconfig
+Scripts/sync.sh             디스크 ↔ 매니페스트 정합성 검사
 Plugins/                    Environment · Configuration · Target · Template
 Tuist/ProjectDescriptionHelpers/
-Modules/                    Project.swift + 36 타깃
 Projects/
 ├── App/                    Project.swift · Sources (4 파일)
-└── Feature/
-    ├── Trip/               Project.swift · Example/Sources
-    ├── Itinerary/          Project.swift · Example/Sources
-    └── Reservation/        Project.swift · Example/Sources
+├── Core/                   Network · Storage · TravelGuide
+├── Shared/                 Common · DesignSystem
+├── Domain/                 Trip · Itinerary · Reservation · Recommendation
+├── Data/                   Trip · Itinerary · Reservation · Recommendation
+└── Feature/                Trip · Itinerary · Reservation
 ```
 
 ## 테스트
@@ -201,7 +242,8 @@ make generate
 
 | | |
 |---|---|
-| `make generate` | 플러그인 해석 + 프로젝트 생성 |
+| `make generate` | 플러그인 해석 → `sync` → 프로젝트 생성 |
+| `make sync` | 디스크의 모듈과 매니페스트 선언이 맞는지 검사 |
 | `make open` | 생성 후 Xcode 로 열기 |
 | `make clean` | 생성물(`.xcodeproj` · `.xcworkspace` · `Derived`)만 삭제 |
 | `make test` | 스킴 4개 테스트 실행 |
