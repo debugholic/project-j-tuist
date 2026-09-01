@@ -9,13 +9,17 @@ extension Project {
   public static func module(
     _ modulePath: String,
     env: ProjectEnvironment = projectJ,
+    usesPackage extraUsesPackage: Bool = false,
     extraTargets: [Target] = []
   ) -> Project {
-    Project(
+    let components = Module.components(at: modulePath)
+
+    return Project(
       name: modulePath.replacingOccurrences(of: "/", with: ""),
       options: .options(automaticSchemesOptions: .disabled),
+      packages: (extraUsesPackage || components.contains(where: \.usesPackage)) ? [.package] : [],
       settings: .settings(base: env.baseSetting),
-      targets: Module.components(at: modulePath).map { $0.target(env) } + extraTargets
+      targets: components.map { $0.target(env) } + extraTargets
     )
   }
 
@@ -29,6 +33,7 @@ extension Project {
     .module(
       "Feature/\(module.rawValue)",
       env: env,
+      usesPackage: dependencies.contains(where: \.isPackage),
       extraTargets: [
         .target(
           name: module.exampleName,

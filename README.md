@@ -33,7 +33,7 @@ J는 다섯 개를 전부 매니페스트로 바꿉니다.
 
 ```
 Tuist.swift                               플러그인 4개 선언
-Workspace.swift                           프로젝트 17개 + 스킴 4개
+Workspace.swift                           프로젝트 13개 + 스킴 4개
 Makefile                                  generate · sync · clean · test · module
 Configurations/                           Debug.xcconfig · Release.xcconfig
 
@@ -57,13 +57,13 @@ Projects/App/Project.swift                앱
 
 ## Package.swift 는 거의 그대로 옮겨진다
 
-I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃을 선언하는 DSL이었습니다. J는 그 DSL을 **`PackageDescription` 에서 `ProjectDescription` 으로 옮기기만** 합니다.
+I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃을 선언하는 DSL이었습니다. J는 그 DSL을 **`PackageDescription` 에서 `ProjectDescription` 으로 옮깁니다** — UIKit 을 안 쓰는 넷은 `PackageDescription` 쪽에 그대로 남습니다(아래 참조).
 
 | | I (SPM) | J (Tuist) |
 |---|---|---|
 | 선언 위치 | `Modules/Package.swift` | `Plugins/TargetPlugin/` |
 | 소스 위치 | `Modules/<Layer>/<Module>` | `Projects/<Layer>/<Module>` |
-| 프로젝트 | 패키지 1개 + xcodeproj 4개 | 프로젝트 17개 |
+| 프로젝트 | 패키지 1개 + xcodeproj 4개 | 패키지 1개 + 프로젝트 13개 |
 | 타깃 한 조각 | `PackageDescription.Target` | `ProjectDescription.Target` |
 | 의존성 | `.byName(name:)` | `.target(name:)` |
 | 산출물 | `.library` product 6개 | `.staticFramework` 타깃 |
@@ -73,7 +73,7 @@ I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃�
 
 `Product` enum 만 `Module` 로 이름을 바꿨습니다 — `ProjectDescription` 에 이미 `Product`(`.app`/`.staticFramework`/`.unitTests`)가 있어서 충돌합니다.
 
-**앱 코드는 한 줄도 안 바뀝니다.** `Projects/` 로 옮겨간 Swift 파일 140개가 I의 `Modules/` 와 바이트 단위로 같습니다. `Bundle.module` 도 그대로 씁니다 — SPM이 만들어주던 접근자를 Tuist가 똑같이 만들어줍니다.
+**앱 코드는 한 줄도 안 바뀝니다.** `Projects/` 와 `Package/` 로 갈라진 Swift 파일 140개가 I의 `Modules/` 와 바이트 단위로 같습니다. `Bundle.module` 도 그대로 씁니다 — SPM이 만들어주던 접근자를 Tuist가 똑같이 만들어줍니다.
 
 ## 모듈 하나가 프로젝트 하나다
 
@@ -107,6 +107,45 @@ let project = Project.module("Domain/Trip")
 
 // 타깃 생성 시점에 결정
 owner == modulePath ? .target(name:) : .project(target:path:)
+```
+
+## UIKit 이 없는 모듈은 패키지에 남긴다
+
+전부 Tuist로 옮길 이유는 없습니다. **UIKit 을 안 쓰는 모듈은 SPM 패키지에 두는 편이 낫습니다** — 시뮬레이터 없이 `swift test` 로 돌기 때문입니다.
+
+I의 README는 이렇게 적어뒀습니다: "`swift test` 는 쓸 수 없습니다. 패키지에 UIKit 타깃이 있어서 macOS 빌드가 거기서 깨집니다." 그 UIKit 타깃이 `SharedDesignSystem`(`UIControl+Publisher`) 하나였습니다. 얘만 빼면 나머지는 macOS 에서 그대로 빌드됩니다.
+
+| 모듈 | import | 자리 |
+|---|---|---|
+| `Core/Network` | Foundation | `Package/` |
+| `Core/Storage` | Foundation · Combine | `Package/` |
+| `Core/TravelGuide` | Foundation (+리소스) | `Package/` |
+| `Shared/Common` | Foundation | `Package/` |
+| `Shared/DesignSystem` | **UIKit** · ObjectiveC | `Projects/` |
+
+이 넷은 `Module.swift` 상 **바깥으로 나가는 의존성이 하나도 없습니다.** SPM 패키지는 Tuist 타깃을 볼 수 없지만 반대는 되므로, 닫힌 집합이라 그대로 떼어낼 수 있습니다.
+
+```
+Package/Package.swift    Core 3 + SharedCommon(+Testing) + CoreTravelGuideTests
+Projects/                Domain 4 · Data 4 · Feature 3 · SharedDesignSystem · App
+```
+
+그 결과 `CoreTravelGuideTests` 7개가 시뮬레이터 없이 돕니다.
+
+```
+cd Package && swift test
+Executed 7 tests, with 0 failures
+```
+
+**의존성 표현이 세 갈래가 됩니다.** 같은 프로젝트면 `.target`, 다른 프로젝트면 `.project`, 패키지면 `.package(product:)`. `ModuleDependency` 가 `Origin`(`.package` / `.project(경로)`)을 들고 있다가 타깃 생성 시점에 소유자와 비교해 셋 중 하나로 풉니다.
+
+`Shared` 는 둘로 갈립니다 — `.shared(.common)` 은 패키지, `.shared(.designSystem)` 은 프로젝트입니다. 선언부 문법은 그대로입니다.
+
+이 경계는 쉽게 무너집니다. 패키지 모듈에 `import UIKit` 이 하나 들어오면 `swift test` 가 macOS 에서 깨지는데, 그건 CI 에서야 드러납니다. `make sync` 가 그것도 봅니다.
+
+```
+✗ Package/ 에 UIKit import 가 있습니다 — swift test 가 깨집니다
+    Package/Core/Storage/Sources/Oops.swift
 ```
 
 ## 플러그인은 서로를 import 할 수 없다
@@ -174,7 +213,7 @@ is not defined in the project named 'App'.
 
 **2. 자동 생성 스킴과 이름이 겹칩니다.**
 
-Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스킴이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 프로젝트 17개 전부에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다.
+Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스킴이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 프로젝트 13개 전부에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다.
 
 **3. `INFOPLIST_FILE` 은 이제 `Config.xcconfig` 가 아니라 매니페스트가 정합니다.**
 
@@ -189,10 +228,12 @@ Configurations/             Debug.xcconfig · Release.xcconfig
 Scripts/sync.sh             디스크 ↔ 매니페스트 정합성 검사
 Plugins/                    Environment · Configuration · Target · Template
 Tuist/ProjectDescriptionHelpers/
-Projects/
-├── App/                    Project.swift · Sources (4 파일)
+Package/                    UIKit 없는 모듈 — swift test 로 검증
 ├── Core/                   Network · Storage · TravelGuide
-├── Shared/                 Common · DesignSystem
+└── Shared/Common
+Projects/                   Tuist 프로젝트 13개
+├── App/                    Sources (4 파일)
+├── Shared/DesignSystem     UIKit
 ├── Domain/                 Trip · Itinerary · Reservation · Recommendation
 ├── Data/                   Trip · Itinerary · Reservation · Recommendation
 └── Feature/                Trip · Itinerary · Reservation
@@ -200,25 +241,23 @@ Projects/
 
 ## 테스트
 
-I와 같습니다. `swift test` 는 애초에 쓸 수 없었고(UIKit 타깃이 macOS 빌드를 깨뜨림), 스킴이 시뮬레이터에서 실행합니다.
+I는 `swift test` 를 쓸 수 없었습니다. J는 UIKit 이 없는 모듈을 패키지로 갈라내 절반을 되찾았습니다.
 
-| 스킴 | 도는 테스트 | 개수 |
-|---|---|---|
-| `App` | `CoreTravelGuideTests` | 7 |
-| `FeatureTripExample` | `DomainTripTests` · `FeatureTripTests` | 10 |
-| `FeatureReservationExample` | `FeatureReservationTests` | 3 |
-| `FeatureItineraryExample` | `DomainItineraryTests` · `FeatureItineraryTests` | 52 |
-| | | **72** |
-
-```
-make test
-```
-
-스킴 하나만 돌리려면:
+| 도는 곳 | 테스트 | 개수 | 시뮬레이터 |
+|---|---|---|---|
+| `swift test` | `CoreTravelGuideTests` | 7 | 불필요 |
+| `FeatureTripExample` | `DomainTripTests` · `FeatureTripTests` | 10 | 필요 |
+| `FeatureReservationExample` | `FeatureReservationTests` | 3 | 필요 |
+| `FeatureItineraryExample` | `DomainItineraryTests` · `FeatureItineraryTests` | 52 | 필요 |
+| | | **72** | |
 
 ```
-xcodebuild test -workspace ProjectJ.xcworkspace -scheme FeatureItineraryExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+make test           # 패키지 + 스킴 전부
+make test-package   # swift test 만
+make test-app       # 스킴만
 ```
+
+`App` 스킴은 이제 테스트를 물지 않습니다 — 물고 있던 `CoreTravelGuideTests` 가 패키지로 갔고, Tuist 스킴은 SPM 테스트 타깃을 참조할 수 없습니다.
 
 ## API 키 설정
 
@@ -246,7 +285,7 @@ make generate
 | `make sync` | 디스크의 모듈과 매니페스트 선언이 맞는지 검사 |
 | `make open` | 생성 후 Xcode 로 열기 |
 | `make clean` | 생성물(`.xcodeproj` · `.xcworkspace` · `Derived`)만 삭제 |
-| `make test` | 스킴 4개 테스트 실행 |
+| `make test` | 패키지(`swift test`) + 앱 스킴 테스트 |
 | `make module NAME=Payment LAYER=Feature` | 모듈 뼈대 생성 |
 
 

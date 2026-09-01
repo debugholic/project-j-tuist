@@ -15,10 +15,9 @@ public enum Component {
     case designSystem = "DesignSystem"
   }
 
-  case core(_ component: Core, dependencies: [ModuleDependency] = [])
-  case coreTests(_ component: Core, dependencies: [ModuleDependency] = [])
+  /// Core 와 SharedCommon 은 `Package/` 로 갔습니다. 여기 남는 Shared 는
+  /// UIKit 을 쓰는 DesignSystem 뿐입니다.
   case shared(_ component: Shared, dependencies: [ModuleDependency] = [])
-  case sharedTesting(_ component: Shared, dependencies: [ModuleDependency] = [])
 
   case domainInterface(_ module: Module, dependencies: [ModuleDependency] = [])
   case domain(_ module: Module, dependencies: [ModuleDependency] = [])
@@ -36,10 +35,7 @@ public enum Component {
 
   public var name: String {
     switch self {
-    case .core(let component, _): "Core\(component.rawValue)"
-    case .coreTests(let component, _): "Core\(component.rawValue)Tests"
     case .shared(let component, _): "Shared\(component.rawValue)"
-    case .sharedTesting(let component, _): "Shared\(component.rawValue)Testing"
     case .domainInterface(let module, _): "Domain\(module.rawValue)Interface"
     case .domain(let module, _): "Domain\(module.rawValue)"
     case .domainTesting(let module, _): "Domain\(module.rawValue)Testing"
@@ -57,8 +53,7 @@ public enum Component {
   /// 모듈 디렉터리. 프로젝트 하나의 단위입니다. 예: `Domain/Trip`
   public var modulePath: String {
     switch self {
-    case .core(let c, _), .coreTests(let c, _): "Core/\(c.rawValue)"
-    case .shared(let c, _), .sharedTesting(let c, _): "Shared/\(c.rawValue)"
+    case .shared(let c, _): "Shared/\(c.rawValue)"
     case .domainInterface(let m, _), .domain(let m, _),
       .domainTesting(let m, _), .domainTests(let m, _):
       "Domain/\(m.rawValue)"
@@ -73,10 +68,10 @@ public enum Component {
   /// 모듈 디렉터리 안에서 이 조각이 앉는 자리.
   public var slot: String {
     switch self {
-    case .core, .shared, .domain, .data, .feature: ""
+    case .shared, .domain, .data, .feature: ""
     case .domainInterface, .dataInterface, .featureInterface: "Interface"
-    case .sharedTesting, .domainTesting, .featureTesting: "Testing"
-    case .coreTests, .domainTests, .dataTests, .featureTests: "Tests"
+    case .domainTesting, .featureTesting: "Testing"
+    case .domainTests, .dataTests, .featureTests: "Tests"
     }
   }
 
@@ -91,10 +86,7 @@ public enum Component {
 
   public var dependencies: [ModuleDependency] {
     switch self {
-    case .core(_, let dependencies),
-      .coreTests(_, let dependencies),
-      .shared(_, let dependencies),
-      .sharedTesting(_, let dependencies),
+    case .shared(_, let dependencies),
       .domainInterface(_, let dependencies),
       .domain(_, let dependencies),
       .domainTesting(_, let dependencies),
@@ -112,7 +104,7 @@ public enum Component {
 
   public var isTest: Bool {
     switch self {
-    case .coreTests, .domainTests, .dataTests, .featureTests: true
+    case .domainTests, .dataTests, .featureTests: true
     default: false
     }
   }

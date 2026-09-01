@@ -7,8 +7,7 @@ public enum Module: String, CaseIterable {
   case reservation = "Reservation"
   case trip = "Trip"
 
-  // Kit
-  case core = "Core"
+  // Kit — Core 와 SharedCommon 은 Package/ 로 갔습니다.
   case shared = "Shared"
 
   public var targets: [Component] {
@@ -269,39 +268,10 @@ public enum Module: String, CaseIterable {
         ),
       ]
 
-    // MARK: - Kit: Core
-    case .core:
-      Component.Core.allCases.flatMap { component -> [Component] in
-        switch component {
-        case .travelGuide:
-          [
-            .core(component),
-            .coreTests(
-              component,
-              dependencies: [.core(component)]
-            ),
-          ]
-        default:
-          [.core(component)]
-        }
-      }
-
     // MARK: - Kit: Shared
+    // Common 은 Package/ 에 있습니다. UIKit 을 쓰는 DesignSystem 만 남습니다.
     case .shared:
-      Component.Shared.allCases.flatMap { component -> [Component] in
-        switch component {
-        case .common:
-          [
-            .shared(component),
-            .sharedTesting(
-              component,
-              dependencies: [.shared(component)]
-            ),
-          ]
-        default:
-          [.shared(component)]
-        }
-      }
+      [.shared(.designSystem)]
     }
   }
 }

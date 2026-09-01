@@ -8,6 +8,7 @@ private let env = projectJ
 let project = Project(
   name: "App",
   options: .options(automaticSchemesOptions: .disabled),
+  packages: [.package],
   settings: .settings(
     base: env.appSetting,
     configurations: ConfigurationType.configurations()

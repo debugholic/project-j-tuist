@@ -1,7 +1,7 @@
 DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
-SCHEMES = App FeatureTripExample FeatureReservationExample FeatureItineraryExample
+SCHEMES = FeatureTripExample FeatureReservationExample FeatureItineraryExample
 
-.PHONY: generate sync open clean test module help
+.PHONY: generate sync open clean test test-package test-app module help
 
 # clone 직후 진입점. 로컬 플러그인 4개를 먼저 해석해야 매니페스트가 컴파일됩니다.
 generate:
@@ -25,8 +25,16 @@ clean:
 	find . -name '*.xcodeproj' -maxdepth 3 -exec rm -rf {} +
 	find . -name 'Derived' -maxdepth 3 -type d -exec rm -rf {} +
 	rm -rf ProjectJ.xcworkspace Tuist/Plugins
+	rm -rf Package/.build
 
-test:
+# Package/ 는 UIKit 이 없어 시뮬레이터 없이 돕니다. 나머지는 스킴으로 돌립니다.
+test: test-package test-app
+
+test-package:
+	@echo "──────── Package (swift test) ────────"
+	@cd Package && swift test
+
+test-app:
 	@for scheme in $(SCHEMES); do \
 		echo "──────── $$scheme ────────"; \
 		xcodebuild test -workspace ProjectJ.xcworkspace \
@@ -45,5 +53,5 @@ help:
 	@echo "sync      디스크의 모듈과 매니페스트 선언이 맞는지 검사"
 	@echo "open      generate 후 Xcode 로 엽니다"
 	@echo "clean     생성물(.xcodeproj · .xcworkspace · Derived)만 삭제"
-	@echo "test      스킴 4개 테스트 실행"
+	@echo "test      패키지(swift test) + 앱 스킴 테스트"
 	@echo "module    모듈 뼈대 생성 — make module NAME=Payment LAYER=Feature"

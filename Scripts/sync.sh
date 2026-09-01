@@ -36,8 +36,28 @@ for dir in Projects/*/*/; do
   fi
 done
 
+# Package/ 쪽 — Project.swift 대신 Package.swift 선언을 봅니다.
+for dir in Package/*/*/; do
+  layer=$(basename "$(dirname "$dir")")
+  name=$(basename "$dir")
+
+  if ! grep -q "\"$layer/$name\"" Package/Package.swift; then
+    echo "  ✗ Package $layer/$name — Package.swift 에 선언이 없습니다"
+    drift=1
+  fi
+done
+
+# UIKit 을 쓰는 모듈이 패키지에 섞이면 swift test 가 macOS 에서 깨집니다.
+if grep -rq "^import UIKit" Package --include='*.swift'; then
+  echo "  ✗ Package/ 에 UIKit import 가 있습니다 — swift test 가 깨집니다"
+  grep -rl "^import UIKit" Package --include='*.swift' | sed 's/^/      /'
+  drift=1
+fi
+
 if [ "$drift" -eq 0 ]; then
-  echo "  모듈 $(find Projects/*/*/ -maxdepth 0 -type d | grep -cv "Projects/App")개 — 디스크와 매니페스트가 일치합니다."
+  tuist_count=$(find Projects/*/*/ -maxdepth 0 -type d | grep -cv "Projects/App")
+  package_count=$(find Package/*/*/ -maxdepth 0 -type d | wc -l | tr -d ' ')
+  echo "  Tuist $tuist_count개 · Package $package_count개 — 디스크와 매니페스트가 일치합니다."
 else
   echo
   echo "  선언이 어긋났습니다. 위 항목을 고치고 다시 도세요."
