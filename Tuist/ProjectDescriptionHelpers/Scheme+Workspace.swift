@@ -1,4 +1,5 @@
 import ProjectDescription
+import TargetPlugin
 
 extension Scheme {
   /// 앱 타깃 하나를 빌드·실행하고, `Modules` 프로젝트의 테스트 타깃을 물리는 스킴입니다.
@@ -15,11 +16,7 @@ extension Scheme {
       name: name,
       shared: true,
       buildAction: .buildAction(targets: [app]),
-      testAction: .targets(
-        tests.map {
-          .testableTarget(target: .project(path: "Modules", target: $0))
-        }
-      ),
+      testAction: .targets(tests.map { .testableTarget(target: .modules($0)) }),
       runAction: .runAction(executable: app)
     )
   }

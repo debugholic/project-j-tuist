@@ -13,7 +13,7 @@ J 단계는 **Tuist**를 추가합니다 — 앱 기능은 I와 같습니다. **
 - XCTest
 - Swift Package Manager (I까지 — J에서 Tuist로 대체)
 - Micro Feature Architecture (모듈 5종 세트 · Interface 의존 · Example 앱)
-- **Tuist** (`Project.swift` · `Workspace.swift` · `ProjectDescriptionHelpers`) ← 이번 단계 추가분
+- **Tuist** (`Project.swift` · `Workspace.swift` · Plugin · `tuist scaffold`) ← 이번 단계 추가분
 
 ## 무엇이 달라졌나
 
@@ -32,19 +32,25 @@ I의 README가 남긴 숙제 그대로입니다 — **Example 앱은 SPM으로 �
 J는 다섯 개를 전부 매니페스트로 바꿉니다.
 
 ```
-Tuist.swift                               Tuist 설정
+Tuist.swift                               플러그인 4개 선언
 Workspace.swift                           프로젝트 5개 + 스킴 4개
-Tuist/ProjectDescriptionHelpers/          매니페스트가 공유하는 DSL
-├── Component.swift                       타깃 한 조각
-├── Module.swift                          모듈별 의존성 그래프
-├── Constant.swift                        팀 ID · 배포 타깃 · 공통 설정
+Configurations/                           Debug.xcconfig · Release.xcconfig
+
+Plugins/                                  ← 서로를 모릅니다
+├── EnvironmentPlugin/                    ProjectEnvironment (이름 · 배포 타깃 · 공통 설정)
+├── ConfigurationPlugin/                  ConfigurationType (Debug · Release ↔ xcconfig)
+├── TargetPlugin/                         Component · Module · 의존성/참조 DSL
+└── TemplatePlugin/                       tuist scaffold Module
+
+Tuist/ProjectDescriptionHelpers/          ← 플러그인을 import 해 조합하는 유일한 층
+├── Environment.swift                     이 프로젝트의 ProjectEnvironment 값
+├── Component+Target.swift                Component + 환경값 → Target
 ├── Project+Example.swift                 Example 앱 프로젝트 팩토리
-├── Scheme+Workspace.swift                워크스페이스 스킴 팩토리
-└── TargetDependency+Modules.swift        프로젝트 간 의존성
+└── Scheme+Workspace.swift                워크스페이스 스킴 팩토리
 
 Modules/Project.swift                     36개 타깃 (Package.swift 자리)
 Projects/App/Project.swift                앱
-Projects/Feature/*/Project.swift          Example 앱 3개 — 각 3줄 + 의존성 목록
+Projects/Feature/*/Project.swift          Example 앱 3개
 ```
 
 `.xcodeproj` 와 `.xcworkspace` 는 이제 **커밋하지 않는 빌드 산출물**입니다. `tuist generate` 가 만듭니다.
@@ -67,6 +73,49 @@ I의 `Package.swift` 는 이미 `Component`/`Product` enum 으로 36개 타깃�
 
 **앱 코드는 한 줄도 안 바뀝니다.** `Modules/` 아래 Swift 파일 140개가 I와 바이트 단위로 같습니다. `Bundle.module` 도 그대로 씁니다 — SPM이 만들어주던 접근자를 Tuist가 똑같이 만들어줍니다.
 
+## 플러그인은 서로를 import 할 수 없다
+
+매니페스트 헬퍼를 `Tuist/ProjectDescriptionHelpers` 한 곳에 두면 금방 뒤엉킵니다. 그래서 역할별로 플러그인 4개로 나눴는데, 여기서 Tuist의 제약 하나가 구조를 결정합니다 — **Tuist는 각 플러그인을 `ProjectDescription` 만 보이는 독립 모듈로 컴파일합니다.** 플러그인끼리는 서로를 import 할 수 없습니다.
+
+그래서 3층이 됩니다.
+
+```
+Plugins/            서로를 모름. 각자 ProjectDescription 만 봄
+      ↓
+Tuist/ProjectDescriptionHelpers/    플러그인을 import 해 조합하는 유일한 층
+      ↓
+Project.swift · Workspace.swift
+```
+
+타깃을 만들려면 이름·경로(`TargetPlugin`)와 배포 타깃·번들 ID(`EnvironmentPlugin`)가 **둘 다** 필요한데, 플러그인 안에서는 반대편을 볼 수 없습니다. 그래서 `Component` 는 이름·경로·의존성까지만 알고, 환경값을 입혀 `Target` 으로 만드는 일은 조합 층의 `Component+Target.swift` 가 합니다.
+
+```swift
+// Plugins/TargetPlugin — 환경값을 모름
+public var path: String { "Feature/\(module.rawValue)" }
+
+// Tuist/ProjectDescriptionHelpers — 둘 다 import 해서 조합
+public func target(_ env: ProjectEnvironment) -> Target { ... }
+```
+
+다음 단계로 넘어갈 때 바꿀 값은 `Tuist/ProjectDescriptionHelpers/Environment.swift` 의 `name` 과 `bundleIdPrefix` 두 줄입니다.
+
+## 모듈 뼈대는 찍어낸다
+
+I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 대신합니다.
+
+```
+tuist scaffold Module --name Payment --layer Feature
+```
+
+```
+Modules/Feature/Payment/Sources/Payment.swift
+Modules/Feature/Payment/Interface/Sources/PaymentInterface.swift
+Modules/Feature/Payment/Testing/Sources/PaymentTesting.swift
+Modules/Feature/Payment/Tests/Sources/PaymentTests.swift
+```
+
+의존성 선언만 `Plugins/TargetPlugin/ProjectDescriptionHelpers/Module.swift` 에 손으로 추가하면 됩니다.
+
 ## 이번에 걸린 것
 
 **1. 프로젝트 간 스킴은 워크스페이스만 선언할 수 있습니다.**
@@ -86,13 +135,15 @@ Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스�
 
 **3. `INFOPLIST_FILE` 은 이제 `Config.xcconfig` 가 아니라 매니페스트가 정합니다.**
 
-I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파일을 커밋했습니다. J는 `infoPlist:` 로 plist 내용을 선언하고 Tuist가 생성합니다. `Projects/App/Info.plist` 는 지웠고, `Config.xcconfig` 에는 시크릿 `#include?` 만 남습니다. UIKit 라이프사이클(`SceneDelegate`)을 쓰는 앱 타깃은 `UIApplicationSceneManifest` 를 매니페스트에 명시했습니다.
+I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파일을 커밋했습니다. J는 `infoPlist:` 로 plist 내용을 선언하고 Tuist가 생성합니다. `Projects/App/Info.plist` 는 지웠고, xcconfig 는 `Configurations/{Debug,Release}.xcconfig` 로 올려 `ConfigurationPlugin` 이 관리합니다 — 시크릿 `#include?` 만 남습니다. UIKit 라이프사이클(`SceneDelegate`)을 쓰는 앱 타깃은 `UIApplicationSceneManifest` 를 매니페스트에 명시했습니다.
 
 ## 구조
 
 ```
 ProjectJ.xcworkspace        ← tuist generate 산출물 (커밋 안 함)
 Tuist.swift · Workspace.swift
+Configurations/             Debug.xcconfig · Release.xcconfig
+Plugins/                    Environment · Configuration · Target · Template
 Tuist/ProjectDescriptionHelpers/
 Modules/                    Project.swift + 36 타깃
 Projects/
@@ -122,7 +173,7 @@ xcodebuild test -workspace ProjectJ.xcworkspace -scheme FeatureItineraryExample 
 
 ## API 키 설정
 
-AeroDataBox(RapidAPI) 키는 F부터 동일하게 주입합니다. `Projects/App/Secrets.local.xcconfig` 에 둡니다 — `Config.xcconfig` 옆이어야 `#include?` 가 찾습니다.
+AeroDataBox(RapidAPI) 키는 F부터 동일하게 주입합니다. 위치도 그대로 `Projects/App/Secrets.local.xcconfig` 입니다 — `Configurations/{Debug,Release}.xcconfig` 가 상대 경로로 `#include?` 합니다.
 
 ```
 RAPIDAPI_KEY = your_rapidapi_key
@@ -133,8 +184,11 @@ RAPIDAPI_KEY = your_rapidapi_key
 Xcode 16+ / iOS 16.0+ / Swift 5.9+ / Tuist 4.111.1.
 
 ```
+tuist install
 tuist generate
 ```
+
+`tuist install` 이 로컬 플러그인 4개를 먼저 해석합니다.
 
 `.xcworkspace` 는 커밋되지 않으므로 **clone 직후엔 없습니다.** `tuist generate` 가 만들고 열어줍니다.
 

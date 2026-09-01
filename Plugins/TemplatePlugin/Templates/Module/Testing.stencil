@@ -1,0 +1,3 @@
+import Foundation
+
+// {{ layer }}{{ name }}Testing — 다른 모듈에 줄 스텁.

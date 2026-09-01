@@ -1,0 +1,4 @@
+import XCTest
+
+// {{ layer }}{{ name }}Tests
+final class {{ layer }}{{ name }}Tests: XCTestCase {}

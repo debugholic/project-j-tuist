@@ -1,25 +1,24 @@
+import ConfigurationPlugin
 import ProjectDescription
 import ProjectDescriptionHelpers
+import TargetPlugin
 
-private let modules: Path = "../../Modules"
+private let env = projectJ
 
 let project = Project(
   name: "App",
   options: .options(automaticSchemesOptions: .disabled),
   settings: .settings(
-    base: Constant.appSettings,
-    configurations: [
-      .debug(name: "Debug", xcconfig: "Config.xcconfig"),
-      .release(name: "Release", xcconfig: "Config.xcconfig"),
-    ]
+    base: env.appSetting,
+    configurations: ConfigurationType.configurations()
   ),
   targets: [
     .target(
       name: "App",
-      destinations: .iOS,
+      destinations: env.destinations,
       product: .app,
-      bundleId: "\(Constant.bundleIdPrefix).app",
-      deploymentTargets: Constant.deploymentTargets,
+      bundleId: env.bundleId("app"),
+      deploymentTargets: env.deploymentTargets,
       infoPlist: .extendingDefault(with: [
         "RapidAPIKey": "$(RAPIDAPI_KEY)",
         "UIApplicationSceneManifest": [
@@ -37,26 +36,26 @@ let project = Project(
       sources: ["Sources/**"],
       resources: ["Sources/Assets.xcassets"],
       dependencies: [
-        .modules("CoreNetwork", at: modules),
-        .modules("CoreStorage", at: modules),
-        .modules("DataItinerary", at: modules),
-        .modules("DataRecommendation", at: modules),
-        .modules("DataReservation", at: modules),
-        .modules("DataTrip", at: modules),
-        .modules("DomainItinerary", at: modules),
-        .modules("DomainItineraryInterface", at: modules),
-        .modules("DomainRecommendation", at: modules),
-        .modules("DomainRecommendationInterface", at: modules),
-        .modules("DomainReservationInterface", at: modules),
-        .modules("DomainTrip", at: modules),
-        .modules("DomainTripInterface", at: modules),
-        .modules("FeatureItinerary", at: modules),
-        .modules("FeatureItineraryInterface", at: modules),
-        .modules("FeatureReservation", at: modules),
-        .modules("FeatureReservationInterface", at: modules),
-        .modules("FeatureTrip", at: modules),
-        .modules("FeatureTripInterface", at: modules),
-        .modules("SharedCommon", at: modules),
+        .modules("CoreNetwork"),
+        .modules("CoreStorage"),
+        .modules("DataItinerary"),
+        .modules("DataRecommendation"),
+        .modules("DataReservation"),
+        .modules("DataTrip"),
+        .modules("DomainItinerary"),
+        .modules("DomainItineraryInterface"),
+        .modules("DomainRecommendation"),
+        .modules("DomainRecommendationInterface"),
+        .modules("DomainReservationInterface"),
+        .modules("DomainTrip"),
+        .modules("DomainTripInterface"),
+        .modules("FeatureItinerary"),
+        .modules("FeatureItineraryInterface"),
+        .modules("FeatureReservation"),
+        .modules("FeatureReservationInterface"),
+        .modules("FeatureTrip"),
+        .modules("FeatureTripInterface"),
+        .modules("SharedCommon"),
       ]
     )
   ]

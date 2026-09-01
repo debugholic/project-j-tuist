@@ -19,6 +19,7 @@ xcuserdata/
 *.xcworkspace/
 Derived/
 Tuist/.build/
+Tuist/Plugins/
 .tuist-version
 
 # Xcode - User-specific

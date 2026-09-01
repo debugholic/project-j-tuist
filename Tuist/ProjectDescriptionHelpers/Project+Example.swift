@@ -1,4 +1,7 @@
+import ConfigurationPlugin
+import EnvironmentPlugin
 import ProjectDescription
+import TargetPlugin
 
 extension Project {
   /// `Projects/Feature/<Module>` 의 Example 앱 프로젝트입니다.
@@ -6,24 +9,26 @@ extension Project {
   /// 스킴은 다른 프로젝트의 테스트 타깃을 물어야 해서 `Workspace.swift` 가 선언합니다.
   public static func example(
     _ module: Module,
+    env: ProjectEnvironment = projectJ,
     dependencies: [String]
   ) -> Project {
-    let modules: Path = "../../../Modules"
-
-    return Project(
+    Project(
       name: "Feature\(module.rawValue)",
       options: .options(automaticSchemesOptions: .disabled),
-      settings: .settings(base: Constant.appSettings),
+      settings: .settings(
+        base: env.appSetting,
+        configurations: ConfigurationType.configurations()
+      ),
       targets: [
         .target(
           name: module.exampleName,
-          destinations: .iOS,
+          destinations: env.destinations,
           product: .app,
-          bundleId: "\(Constant.bundleIdPrefix).example.\(module.rawValue.lowercased())",
-          deploymentTargets: Constant.deploymentTargets,
+          bundleId: env.bundleId("example.\(module.rawValue.lowercased())"),
+          deploymentTargets: env.deploymentTargets,
           infoPlist: .default,
           sources: ["Example/Sources/**"],
-          dependencies: dependencies.map { .modules($0, at: modules) }
+          dependencies: dependencies.map { .modules($0) }
         )
       ]
     )

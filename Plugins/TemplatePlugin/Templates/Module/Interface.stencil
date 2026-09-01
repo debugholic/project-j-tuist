@@ -1,0 +1,4 @@
+import Foundation
+
+// {{ layer }}{{ name }}Interface — 다른 모듈이 보는 계약.
+// 구현을 숨기고 이것만 노출합니다.

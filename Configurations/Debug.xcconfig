@@ -1,0 +1,4 @@
+// 공통 빌드 구성 (Debug).
+// 키 정의(RAPIDAPI_KEY)는 커밋되지 않는 Secrets.local.xcconfig 에만 둡니다.
+// F 단계부터 지켜온 위치 그대로 앱 소스 옆에 둡니다.
+#include? "../Projects/App/Secrets.local.xcconfig"

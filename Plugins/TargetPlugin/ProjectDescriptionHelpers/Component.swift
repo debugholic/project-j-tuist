@@ -1,54 +1,6 @@
 import Foundation
 import ProjectDescription
 
-// MARK: - Dependency
-
-extension TargetDependency {
-  public static func core(_ component: Component.Core) -> Self {
-    .target(name: "Core\(component.rawValue)")
-  }
-
-  public static func shared(_ component: Component.Shared) -> Self {
-    .target(name: "Shared\(component.rawValue)")
-  }
-
-  public static func sharedTesting(_ component: Component.Shared) -> Self {
-    .target(name: "Shared\(component.rawValue)Testing")
-  }
-
-  public static func domain(_ module: Module) -> Self {
-    .target(name: "Domain\(module.rawValue)")
-  }
-
-  public static func domainInterface(_ module: Module) -> Self {
-    .target(name: "Domain\(module.rawValue)Interface")
-  }
-
-  public static func domainTesting(_ module: Module) -> Self {
-    .target(name: "Domain\(module.rawValue)Testing")
-  }
-
-  public static func data(_ module: Module) -> Self {
-    .target(name: "Data\(module.rawValue)")
-  }
-
-  public static func dataInterface(_ module: Module) -> Self {
-    .target(name: "Data\(module.rawValue)Interface")
-  }
-
-  public static func feature(_ module: Module) -> Self {
-    .target(name: "Feature\(module.rawValue)")
-  }
-
-  public static func featureInterface(_ module: Module) -> Self {
-    .target(name: "Feature\(module.rawValue)Interface")
-  }
-
-  public static func featureTesting(_ module: Module) -> Self {
-    .target(name: "Feature\(module.rawValue)Testing")
-  }
-}
-
 // MARK: - Component
 
 public enum Component {
@@ -150,30 +102,23 @@ public enum Component {
     }
   }
 
-  var resources: ResourceFileElements? {
+  public var resources: ResourceFileElements? {
     exists("Resources") ? ["\(path)/Resources/**"] : nil
   }
 
   private func exists(_ directory: String) -> Bool {
     FileManager.default.fileExists(
-      atPath: Path.modulesRoot.appending("/\(path)/\(directory)")
+      atPath: Self.modulesRoot.appending("/\(path)/\(directory)")
     )
   }
 
-  // MARK: - Target
-
-  public var target: Target {
-    .target(
-      name: name,
-      destinations: .iOS,
-      product: isTest ? .unitTests : .staticFramework,
-      bundleId: "\(Constant.bundleIdPrefix).\(name)",
-      deploymentTargets: Constant.deploymentTargets,
-      infoPlist: .default,
-      sources: ["\(path)/Sources/**"],
-      resources: resources,
-      dependencies: dependencies,
-      settings: .settings(base: Constant.moduleSettings)
-    )
-  }
+  /// 플러그인은 `<root>/Plugins/TargetPlugin/ProjectDescriptionHelpers` 에서
+  /// 컴파일되므로 세 단계 올라가면 리포 루트입니다.
+  private static let modulesRoot: String = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()  // ProjectDescriptionHelpers
+    .deletingLastPathComponent()  // TargetPlugin
+    .deletingLastPathComponent()  // Plugins
+    .deletingLastPathComponent()  // <root>
+    .appendingPathComponent("Modules")
+    .path
 }

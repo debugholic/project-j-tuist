@@ -1,5 +1,6 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
+import TargetPlugin
 
 let project = Project.example(
   .reservation,
