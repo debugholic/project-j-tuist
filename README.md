@@ -104,8 +104,10 @@ public func target(_ env: ProjectEnvironment) -> Target { ... }
 I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 대신합니다.
 
 ```
-tuist scaffold Module --name Payment --layer Feature
+make module NAME=Payment LAYER=Feature
 ```
+
+템플릿 이름은 디렉터리명을 따라 대문자 `Module` 입니다 — `tuist scaffold Module --name …` 을 그대로 부릅니다.
 
 ```
 Modules/Feature/Payment/Sources/Payment.swift
@@ -140,7 +142,8 @@ I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파�
 ## 구조
 
 ```
-ProjectJ.xcworkspace        ← tuist generate 산출물 (커밋 안 함)
+ProjectJ.xcworkspace        ← make generate 산출물 (커밋 안 함)
+Makefile                    진입점
 Tuist.swift · Workspace.swift
 Configurations/             Debug.xcconfig · Release.xcconfig
 Plugins/                    Environment · Configuration · Target · Template
@@ -167,7 +170,12 @@ I와 같습니다. `swift test` 는 애초에 쓸 수 없었고(UIKit 타깃이 
 | | | **72** |
 
 ```
-tuist generate
+make test
+```
+
+스킴 하나만 돌리려면:
+
+```
 xcodebuild test -workspace ProjectJ.xcworkspace -scheme FeatureItineraryExample -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
@@ -184,13 +192,21 @@ RAPIDAPI_KEY = your_rapidapi_key
 Xcode 16+ / iOS 16.0+ / Swift 5.9+ / Tuist 4.111.1.
 
 ```
-tuist install
-tuist generate
+make generate
 ```
 
-`tuist install` 이 로컬 플러그인 4개를 먼저 해석합니다.
+`.xcworkspace` 는 커밋되지 않으므로 **clone 직후엔 없습니다.** `make generate` 가
+`tuist install`(로컬 플러그인 4개 해석) → `tuist generate` 를 순서대로 돌립니다.
+플러그인을 먼저 해석하지 않으면 매니페스트가 컴파일되지 않습니다.
 
-`.xcworkspace` 는 커밋되지 않으므로 **clone 직후엔 없습니다.** `tuist generate` 가 만들고 열어줍니다.
+| | |
+|---|---|
+| `make generate` | 플러그인 해석 + 프로젝트 생성 |
+| `make open` | 생성 후 Xcode 로 열기 |
+| `make clean` | 생성물(`.xcodeproj` · `.xcworkspace` · `Derived`)만 삭제 |
+| `make test` | 스킴 4개 테스트 실행 |
+| `make module NAME=Payment LAYER=Feature` | 모듈 뼈대 생성 |
+
 
 `App` 은 전체 앱, `Feature*Example` 은 그 모듈만 링크한 단독 앱입니다.
 
