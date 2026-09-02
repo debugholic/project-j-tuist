@@ -14,8 +14,11 @@ enum Component: CaseIterable {
   case coreTravelGuideTests
   case sharedCommon
   case sharedCommonTesting
-  /// 디렉터리를 읽어 모듈 선언을 생성하는 도구. iOS 산출물이 아닙니다.
+  /// 매니페스트 선언을 생성하는 도구들. iOS 산출물이 아닙니다.
+  case generateModule
   case syncModules
+  case syncSchemes
+  case syncTargets
 
   var name: String {
     switch self {
@@ -25,7 +28,10 @@ enum Component: CaseIterable {
     case .coreTravelGuideTests: "CoreTravelGuideTests"
     case .sharedCommon: "SharedCommon"
     case .sharedCommonTesting: "SharedCommonTesting"
+    case .generateModule: "GenerateModule"
     case .syncModules: "SyncModules"
+    case .syncSchemes: "SyncSchemes"
+    case .syncTargets: "SyncTargets"
     }
   }
 
@@ -37,7 +43,10 @@ enum Component: CaseIterable {
     case .coreTravelGuideTests: "Core/TravelGuide/Tests"
     case .sharedCommon: "Shared/Common"
     case .sharedCommonTesting: "Shared/Common/Testing"
+    case .generateModule: "Tool/GenerateModule"
     case .syncModules: "Tool/SyncModules"
+    case .syncSchemes: "Tool/SyncSchemes"
+    case .syncTargets: "Tool/SyncTargets"
     }
   }
 
@@ -58,7 +67,7 @@ enum Component: CaseIterable {
 
   var isTool: Bool {
     switch self {
-    case .syncModules: true
+    case .generateModule, .syncModules, .syncSchemes, .syncTargets: true
     default: false
     }
   }
@@ -112,6 +121,8 @@ let package = Package(
   products: Component.allCases
     .filter(\.isProduct)
     .map { .library(name: $0.name, targets: [$0.name]) }
-    + [.executable(name: "SyncModules", targets: ["SyncModules"])],
+    + Component.allCases.filter(\.isTool).map {
+      .executable(name: "\($0.name)Tool", targets: [$0.name])
+    },
   targets: Component.allCases.map(\.target)
 )

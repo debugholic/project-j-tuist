@@ -20,7 +20,12 @@ xcuserdata/
 Derived/
 Tuist/.build/
 Tuist/Plugins/
-Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated/
+
+# SyncModules · SyncTargets · SyncSchemes 가 매번 다시 만드는 선언
+Tuist/ProjectDescriptionHelpers/.generated/
+Tuist/ProjectDescriptionHelpers/Modules.swift
+Tuist/ProjectDescriptionHelpers/Targets.swift
+Tuist/ProjectDescriptionHelpers/Schemes.swift
 .tuist-version
 
 # Xcode - User-specific

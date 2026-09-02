@@ -1,2 +1,2 @@
-// 공통 빌드 구성 (Release).
+// 공통 빌드 구성 (Production).
 #include? "../Projects/App/Secrets.local.xcconfig"

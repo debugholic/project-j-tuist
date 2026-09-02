@@ -1,5 +1,5 @@
 DESTINATION ?= platform=iOS Simulator,name=iPhone 17 Pro
-SCHEMES = FeatureTripExample FeatureReservationExample FeatureItineraryExample
+SCHEMES = ExampleTrip ExampleReservation ExampleItinerary DomainTrip DomainItinerary
 
 .PHONY: generate sync open clean test test-package test-app module help
 
@@ -9,11 +9,10 @@ generate:
 	$(MAKE) sync
 	tuist generate --no-open
 
-# 디렉터리 구조를 읽어 모듈·타깃 선언을 생성하고, 남은 어긋남을 검사합니다.
-# 진실의 원천은 디스크입니다 — 손으로 적는 것은 의존성 그래프뿐입니다.
 sync:
-	@cd Package && swift run -q SyncModules
-	@./Scripts/sync.sh
+	swift run --package-path Package SyncModulesTool
+	swift run --package-path Package SyncTargetsTool
+	swift run --package-path Package SyncSchemesTool
 
 open:
 	tuist install
@@ -27,7 +26,7 @@ clean:
 	find . -maxdepth 4 -name 'Derived' -type d -exec rm -rf {} +
 	rm -rf ProjectJ.xcworkspace Tuist/Plugins
 	rm -rf Package/.build
-	rm -rf Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated
+	rm -rf Tuist/ProjectDescriptionHelpers/.generated
 
 # Package/ 는 UIKit 이 없어 시뮬레이터 없이 돕니다. 나머지는 스킴으로 돌립니다.
 test: test-package test-app
@@ -44,11 +43,9 @@ test-app:
 			| grep -E "error:|Executed .* tests|TEST (SUCCEEDED|FAILED)" || exit 1; \
 	done
 
-# make module NAME=Payment LAYER=Feature
 module:
-	@test -n "$(NAME)" || (echo "NAME 이 필요합니다 — 예: make module NAME=Payment LAYER=Feature"; exit 1)
-	tuist scaffold Module --name $(NAME) --layer $(or $(LAYER),Feature)
-	@echo "의존성은 Plugins/TargetPlugin/ProjectDescriptionHelpers/Dependencies.swift 에 추가하세요."
+	swift run --package-path Package GenerateModuleTool
+	$(MAKE) sync
 
 help:
 	@echo "generate  플러그인 해석 + sync + 프로젝트 생성 (clone 직후 이것부터)"
