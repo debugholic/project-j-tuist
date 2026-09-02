@@ -1,3 +1,4 @@
+import ConfigurationPlugin
 import EnvironmentPlugin
 import ProjectDescription
 import TargetPlugin
@@ -18,7 +19,10 @@ extension Project {
       name: modulePath.replacingOccurrences(of: "/", with: ""),
       options: .options(automaticSchemesOptions: .disabled),
       packages: components.contains(where: \.usesPackage) ? [.local] : [],
-      settings: .settings(base: env.baseSetting),
+      settings: .settings(
+        base: env.baseSetting,
+        configurations: ConfigurationType.configurations()
+      ),
       targets: components.map { $0.target(env) }
     )
   }
