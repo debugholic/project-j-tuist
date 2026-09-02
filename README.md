@@ -33,27 +33,33 @@ J는 다섯 개를 전부 매니페스트로 바꿉니다.
 
 ```
 Tuist.swift                               플러그인 4개 선언
-Workspace.swift                           프로젝트 13개 + 스킴 4개
+Workspace.swift                           ./Projects/**
 Makefile                                  generate · sync · clean · test · module
 mise.toml                                 Tuist 버전 고정
-Configurations/                           Debug.xcconfig · Release.xcconfig
+Configurations/                           Debug · Staging · Production
 
-Package/Tool/SyncModules                  디렉터리 → 선언 생성기
+Package/Tool/                             생성기 4개
+├── SyncModules                           디렉터리 → Modules.swift
+├── SyncTargets                           Modules.swift → 타깃 선언
+├── SyncSchemes                           타깃 → Scheme 선언
+└── GenerateModule                        모듈 뼈대
 
 Plugins/                                  ← 서로를 모릅니다
-├── EnvironmentPlugin/                    ProjectEnvironment (이름 · 배포 타깃 · plist 기본값)
-├── ConfigurationPlugin/                  ConfigurationType (Debug · Release ↔ xcconfig)
-├── TargetPlugin/                         Component · ModuleDependency · Dependencies
-│   └── .generated/Modules.swift          ← 생성물, 커밋 안 함
-└── TemplatePlugin/                       tuist scaffold Module
+├── EnvironmentPlugin/                    ProjectEnvironment
+├── ConfigurationPlugin/                  ConfigurationType ↔ xcconfig
+├── TargetPlugin/                         ModulePath · TargetFactory · TargetDependency
+└── TemplatePlugin/                       모듈 · 소스 · 인터페이스 · 테스트 템플릿
 
 Tuist/ProjectDescriptionHelpers/          ← 플러그인을 import 해 조합하는 유일한 층
-├── Environment.swift                     이 프로젝트의 ProjectEnvironment 값
-├── Component+Target.swift                Component + 환경값 → Target
-├── Project+Module.swift                  모듈 프로젝트 팩토리
-└── Scheme+Workspace.swift                워크스페이스 스킴 팩토리
+├── .generated/Targets · Schemes          매번 다시 생성, 커밋 안 함
+├── Modules · Targets · Schemes           매번 다시 생성, 커밋 안 함
+├── Dependencies · Environment · Settings 최초 1회 생성 후 손으로 관리
+├── InfoPlists · BundlePrefixes · Scripts
+├── CoreDataModels · Permissions
+├── Build/Test/Run/ArchiveActions
+└── Configurations                        순수 수동
 
-Projects/<Layer>/<Module>/Project.swift   모듈마다 한 줄
+Projects/<Layer>/<Module>/Project.swift   모듈마다 타깃 목록 한 벌
 Projects/App/Project.swift                앱
 ```
 
@@ -95,22 +101,23 @@ Projects/Feature/Trip/
 └── Example/Sources        ← I 에서 별도 .xcodeproj 였던 것
 ```
 
-`Project.swift` 는 한 줄입니다. 타깃 구성은 디렉터리 스캔 결과(`.generated/Modules.swift`)에서 나옵니다.
+`Project.swift` 는 타깃 이름만 나열합니다. 타깃의 실체는 `SyncTargets` 가 `.generated/Targets/` 에 만들어 둡니다.
 
 ```swift
-let project = Project.module("Domain/Trip")
+let project = Project(
+  name: "DomainTrip",
+  settings: .settings(base: baseSettings, configurations: configurations),
+  targets: [.domainTrip, .domainTripInterface, .domainTripTests, .domainTripTesting]
+)
 ```
 
 **프로젝트가 갈라지면 의존성 표현이 달라집니다.** 같은 프로젝트 안이면 `.target(name:)`, 다른 프로젝트면 `.project(target:path:)` 여야 하는데, 어느 쪽인지는 *누가 의존하는지* 를 알아야 정해집니다. `DomainTrip → DomainTripInterface` 는 같은 프로젝트지만 `DataTrip → DomainTripInterface` 는 아닙니다.
 
-그래서 의존성을 `TargetDependency` 로 바로 쓰지 않고 `ModuleDependency` 라는 값으로 들고 있다가, 타깃을 만드는 시점에 소유자와 비교해 풉니다.
+플러그인이 주는 `.domain(interface:)` 계열은 같은 프로젝트를 가리키는 `.target(name:)` 입니다. 바깥 모듈은 `Dependencies.swift` 의 `xDomain` 계열로 겁니다.
 
 ```swift
-// 선언 — 어느 쪽인지 아직 모름
-.domainInterface(.trip)
-
-// 타깃 생성 시점에 결정
-owner == modulePath ? .target(name:) : .project(target:path:)
+.domain(interface: .trip)        // 같은 프로젝트
+.xDomain(.Trip, "Interface")     // 다른 프로젝트
 ```
 
 ## UIKit 이 없는 모듈은 패키지에 남긴다
@@ -141,11 +148,15 @@ cd Package && swift test
 Executed 7 tests, with 0 failures
 ```
 
-**의존성 표현이 세 갈래가 됩니다.** 같은 프로젝트면 `.target`, 다른 프로젝트면 `.project`, 패키지면 `.package(product:)`. `ModuleDependency` 가 `Origin`(`.package` / `.project(경로)`)을 들고 있다가 타깃 생성 시점에 소유자와 비교해 셋 중 하나로 풉니다.
+**의존성 표현이 세 갈래가 됩니다.** 같은 프로젝트면 `.target`, 다른 프로젝트면 `.project`, 패키지면 `.package(product:)`. 셋 다 `Dependencies.swift` 에서 손으로 구분해 적습니다.
 
-`Shared` 는 둘로 갈립니다 — `.shared(.common)` 은 패키지, `.shared(.designSystem)` 은 프로젝트입니다. 선언부 문법은 그대로입니다.
+```swift
+.package(product: "SharedCommon", type: .runtime, condition: .none)   // Package/
+.domain(interface: .trip)                                             // 같은 프로젝트
+.xDomain(.Reservation, "Interface")                                   // 다른 프로젝트
+```
 
-이 경계는 쉽게 무너집니다. 패키지 모듈에 `import UIKit` 이 하나 들어오면 `swift test` 가 macOS 에서 깨지는데, 그건 CI 에서야 드러납니다. `make sync` 가 그것도 봅니다.
+`Shared` 는 둘로 갈립니다 — `SharedCommon` 은 패키지, `SharedDesignSystem` 은 프로젝트입니다.
 
 ```
 ✗ Package/ 에 UIKit import 가 있습니다 — swift test 가 깨집니다
@@ -166,53 +177,63 @@ Tuist/ProjectDescriptionHelpers/    플러그인을 import 해 조합하는 유�
 Project.swift · Workspace.swift
 ```
 
-타깃을 만들려면 이름·경로(`TargetPlugin`)와 배포 타깃·번들 ID(`EnvironmentPlugin`)가 **둘 다** 필요한데, 플러그인 안에서는 반대편을 볼 수 없습니다. 그래서 `Component` 는 이름·경로·의존성까지만 알고, 환경값을 입혀 `Target` 으로 만드는 일은 조합 층의 `Component+Target.swift` 가 합니다.
+타깃을 만들려면 이름·경로(`TargetPlugin`)와 배포 타깃·번들 ID(`EnvironmentPlugin`)가 **둘 다** 필요한데, 플러그인 안에서는 반대편을 볼 수 없습니다. 그래서 플러그인은 빈칸이 뚫린 팩토리(`TargetFactory`)만 주고, 그 빈칸을 채우는 값은 조합 층이 넘깁니다.
 
 ```swift
 // Plugins/TargetPlugin — 환경값을 모름
-public var path: String { "Feature/\(module.rawValue)" }
+public static func feature(implements module: ModuleFeatureType?, factory: TargetFactory) -> Target
 
-// Tuist/ProjectDescriptionHelpers — 둘 다 import 해서 조합
-public func target(_ env: ProjectEnvironment) -> Target { ... }
+// Tuist/ProjectDescriptionHelpers/.generated — 환경값을 넣어 호출
+.feature(implements: .trip, factory: .init(
+  destinations: .featureTripDestinations,
+  bundlePrefix: .featureTripBundlePrefix,
+  deploymentTargets: .featureTripDeploymentTargets,
+  ...
+))
 ```
 
-다음 단계로 넘어갈 때 바꿀 값은 `Tuist/ProjectDescriptionHelpers/Environment.swift` 의 `name` 과 `bundleIdPrefix` 두 줄입니다.
+다음 단계로 넘어갈 때 바꿀 값은 `Tuist/ProjectDescriptionHelpers/Environment.swift` 의 `name` 과 `organizationName` 두 줄입니다.
 
 ## 선언은 디렉터리에서 생성한다
 
 모듈을 하나 늘릴 때 손으로 고칠 곳이 많으면 어딘가는 빠집니다. **어떤 모듈이 있고 어떤 타깃이 있는지는 디스크에 이미 적혀 있으니, 읽어서 생성합니다.**
 
 ```
-Package/Tool/SyncModules          디렉터리 스캐너 (swift run)
+Package/Tool/SyncModules          디렉터리 스캐너
         ↓
-Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated/Modules.swift
-        Module 열거형 · ScannedTarget 목록      ← AUTO-GENERATED, 커밋 안 함
+Tuist/ProjectDescriptionHelpers/Modules.swift      Module 열거형
+        ↓
+Package/Tool/SyncTargets          Modules.swift 파싱
+        ↓
+Tuist/ProjectDescriptionHelpers/.generated/Targets/    타깃 실체
+Tuist/ProjectDescriptionHelpers/Targets.swift          타깃 목록
+        ↓
+Package/Tool/SyncSchemes          타깃 → Scheme
+        ↓
+Tuist/ProjectDescriptionHelpers/.generated/Schemes/
 ```
+
+넷 다 `AUTO-GENERATED` 이고 커밋하지 않습니다. 같은 이름 규칙으로 **최초 1회만** 만들어지는 파일이 따로 있습니다 — `Dependencies` · `Environment` · `Settings` · `InfoPlists` · `BundlePrefixes` · `Scripts` · `CoreDataModels` · `Permissions` · `Build/Test/Run/ArchiveActions`. 한 번 생기면 도구가 다시 건드리지 않으므로 손으로 관리합니다.
 
 `Interface/Sources` 가 있으면 Interface 타깃이 생기고, `Example/Sources` 가 있으면 Example 앱이 생깁니다. 디렉터리가 없으면 그 타깃도 없습니다 — `Domain/Reservation` 에 구현 타깃이 없는 것도 그래서입니다.
 
 **생성되지 않는 것은 의존성 그래프 하나뿐입니다.** 무엇이 무엇에 기대는지는 디렉터리에 적혀 있지 않습니다. `Dependencies.swift` 에 손으로 남습니다.
 
 ```
-make module NAME=Payment LAYER=Feature   # 디렉터리 + Project.swift
-make sync                                # 스캔 → 타깃 4개 생성
-  모듈 10개 · 타깃 43개 — 디스크에서 생성했습니다.
-  ! Feature/Payment — 의존성이 비어 있습니다
+make module          # 뼈대 생성 후 sync 까지
 ```
 
-선언은 한 줄도 손대지 않았는데 `FeaturePayment` · `…Interface` · `…Testing` · `…Tests` 가 생깁니다. 남은 일은 의존성을 채우는 것뿐이고, 그것도 비어 있으면 `sync` 가 알려줍니다.
-
-`sync` 는 생성 뒤에 세 가지를 더 봅니다 — 모듈 디렉터리에 `Project.swift` 가 있는지, 의존성이 비어 있지 않은지, 그리고 `Package/` 에 `import UIKit` 이 섞이지 않았는지(섞이면 `swift test` 가 macOS 에서 깨집니다).
+선언은 한 줄도 손대지 않았는데 `FeaturePayment` · `…Interface` · `…Testing` · `…Tests` 가 생깁니다. 남은 일은 `Dependencies.swift` 에 의존성을 채우는 것뿐입니다.
 
 ## 모듈 뼈대는 찍어낸다
 
-I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `TemplatePlugin` 이 `Project.swift` 까지 같이 찍어냅니다.
+I에서 모듈 하나를 늘리려면 `Interface`·`Sources`·`Testing`·`Tests` 네 폴더를 손으로 만들어야 했습니다. `GenerateModuleTool` 이 레이어와 이름, 어떤 슬롯을 만들지 물어보고 `Project.swift` 까지 같이 찍어냅니다.
 
 ```
-make module NAME=Payment LAYER=Feature
+make module
 ```
 
-템플릿 이름은 디렉터리명을 따라 대문자 `Module` 입니다 — `tuist scaffold Module --name …` 을 그대로 부릅니다.
+슬롯마다 템플릿이 따로 있고(`Sources` · `Interface` · `Testing` · `Tests` · `Example`), 도구가 `tuist scaffold <슬롯> --name … --layer …` 를 필요한 만큼 부릅니다.
 
 ```
 Projects/Feature/Payment/Project.swift
@@ -222,41 +243,42 @@ Projects/Feature/Payment/Testing/Sources/PaymentTesting.swift
 Projects/Feature/Payment/Tests/Sources/PaymentTests.swift
 ```
 
-타깃은 `make sync` 가 스캔해서 잡습니다. 남는 일은 `Dependencies.swift` 에 의존성을 채우는 것뿐입니다.
+타깃은 이어서 도는 `make sync` 가 잡습니다. 남는 일은 `Dependencies.swift` 에 의존성을 채우는 것뿐입니다.
 
 ## 이번에 걸린 것
 
-**1. 프로젝트 간 스킴은 워크스페이스만 선언할 수 있습니다.**
+**1. 프로젝트 간 Scheme 은 워크스페이스만 선언할 수 있습니다.**
 
-`App` 스킴은 앱 타깃(`Projects/App`)과 테스트 타깃(`Projects/Core/TravelGuide`)을 같이 뭅니다. 이걸 프로젝트 매니페스트의 `schemes:` 에 넣으면 린트에서 막힙니다.
+`App` Scheme 은 앱 타깃(`Projects/App`)과 테스트 타깃(`Projects/Core/TravelGuide`)을 같이 뭅니다. 이걸 프로젝트 매니페스트의 `schemes:` 에 넣으면 린트에서 막힙니다.
 
 ```
 The target 'CoreTravelGuideTests' specified in scheme 'App'
 is not defined in the project named 'App'.
 ```
 
-스킴 4개를 전부 `Workspace.swift` 로 올려서 해결했습니다. 프로젝트 매니페스트는 타깃만 선언합니다. (Example 스킴은 모듈을 합치면서 같은 프로젝트가 됐지만, 일관성을 위해 넷 다 워크스페이스에 둡니다.)
+그래서 Scheme 은 자기 프로젝트 안에서만 닫힙니다. `App` Scheme 은 `Projects/App`, `ExampleTrip` 은 `Projects/Feature/Trip`, `DomainTrip` 은 `Projects/Domain/Trip` 이 각각 선언합니다. `Workspace.swift` 는 프로젝트 경로만 씁니다.
 
-**2. 자동 생성 스킴과 이름이 겹칩니다.**
+**2. 자동 생성 Scheme 과 이름이 겹칩니다.**
 
-Tuist는 타깃마다 스킴을 자동으로 만듭니다. 그래서 `App` 스킴이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 프로젝트 13개 전부에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다. 워크스페이스에도 같은 뜻으로 `autogeneratedWorkspaceSchemes: .disabled` 를 뒀지만, Tuist 4.166.0 에서는 이 옵션이 `ProjectJ-Workspace` 와 `Generate Project` 를 없애지 못합니다(`.enabled()` 로 뒤집어도 결과가 같습니다). 선언한 4개와 이름이 겹치지 않아 `xcodebuild -scheme` 의 모호함은 사라졌습니다.
+Tuist는 타깃마다 Scheme 을 자동으로 만듭니다. 그래서 `App` Scheme 이 워크스페이스 것 하나, `App` 프로젝트 것 하나 — 둘이 되어 `xcodebuild -scheme App` 이 모호해집니다. 프로젝트 13개 전부에 `automaticSchemesOptions: .disabled` 를 줘서 껐습니다. 워크스페이스에도 같은 뜻으로 `autogeneratedWorkspaceSchemes: .disabled` 를 뒀지만, Tuist 4.166.0 에서는 이 옵션이 `ProjectJ-Workspace` 와 `Generate Project` 를 없애지 못합니다(`.enabled()` 로 뒤집어도 결과가 같습니다). 선언한 Scheme 과 이름이 겹치지 않아 `xcodebuild -scheme` 의 모호함은 사라졌습니다.
 
 **3. `INFOPLIST_FILE` 은 이제 `Config.xcconfig` 가 아니라 매니페스트가 정합니다.**
 
-I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파일을 커밋했습니다. J는 `infoPlist:` 로 plist 내용을 선언하고 Tuist가 생성합니다. `Projects/App/Info.plist` 는 지웠고, xcconfig 는 `Configurations/{Debug,Release}.xcconfig` 로 올려 `ConfigurationPlugin` 이 관리합니다 — 시크릿 `#include?` 만 남습니다. UIKit 라이프사이클(`SceneDelegate`)을 쓰는 앱 타깃은 `UIApplicationSceneManifest` 를 매니페스트에 명시했습니다.
+I는 `Config.xcconfig` 에서 `INFOPLIST_FILE = Info.plist` 를 잡고 그 파일을 커밋했습니다. J는 `infoPlist:` 로 plist 내용을 선언하고 Tuist가 생성합니다. `Projects/App/Info.plist` 는 지웠고, xcconfig 는 `Configurations/{Debug,Staging,Production}.xcconfig` 로 올려 `ConfigurationPlugin` 이 관리합니다 — 시크릿 `#include?` 만 남습니다. UIKit 라이프사이클(`SceneDelegate`)을 쓰는 앱 타깃은 `UIApplicationSceneManifest` 를 매니페스트에 명시했습니다.
 
 ## 구조
 
 ```
 ProjectJ.xcworkspace        ← make generate 산출물 (커밋 안 함)
 Makefile                    진입점
-Configurations/             Debug.xcconfig · Release.xcconfig
-Scripts/sync.sh             생성 후 남은 어긋남 검사
+mise.toml                   Tuist 버전 고정
+Configurations/             Debug · Staging · Production
 Plugins/                    Environment · Configuration · Target · Template
-Tuist/ProjectDescriptionHelpers/
+Tuist/ProjectDescriptionHelpers/   생성물 + 최초 1회 생성 후 수동
 Package/                    UIKit 없는 모듈 — swift test 로 검증
 ├── Core/                   Network · Storage · TravelGuide
-└── Shared/Common
+├── Shared/Common
+└── Tool/                   SyncModules · SyncTargets · SyncSchemes · GenerateModule
 Projects/                   Tuist 프로젝트 13개
 ├── App/                    Sources (4 파일)
 ├── Shared/DesignSystem     UIKit
@@ -272,22 +294,26 @@ I는 `swift test` 를 쓸 수 없었습니다. J는 UIKit 이 없는 모듈을 �
 | 도는 곳 | 테스트 | 개수 | 시뮬레이터 |
 |---|---|---|---|
 | `swift test` | `CoreTravelGuideTests` | 7 | 불필요 |
-| `FeatureTripExample` | `DomainTripTests` · `FeatureTripTests` | 10 | 필요 |
-| `FeatureReservationExample` | `FeatureReservationTests` | 3 | 필요 |
-| `FeatureItineraryExample` | `DomainItineraryTests` · `FeatureItineraryTests` | 52 | 필요 |
+| `ExampleTrip` | `FeatureTripTests` | 4 | 필요 |
+| `ExampleReservation` | `FeatureReservationTests` | 3 | 필요 |
+| `ExampleItinerary` | `FeatureItineraryTests` | 37 | 필요 |
+| `DomainTrip` | `DomainTripTests` | 6 | 필요 |
+| `DomainItinerary` | `DomainItineraryTests` | 15 | 필요 |
 | | | **72** | |
 
+Example Scheme 은 프로젝트 레벨이라 자기 프로젝트의 타깃만 뭅니다. Domain 테스트를 같이 물리려면 워크스페이스 Scheme 이어야 하는데, 그러면 프로젝트마다 Scheme 을 선언하는 규칙이 깨집니다. Domain 쪽은 각 프로젝트의 Scheme 으로 따로 뒀습니다.
+
 ```
-make test           # 패키지 + 스킴 전부
+make test           # 패키지 + Scheme 전부
 make test-package   # swift test 만
-make test-app       # 스킴만
+make test-app       # Scheme 만
 ```
 
-`App` 스킴은 이제 테스트를 물지 않습니다 — 물고 있던 `CoreTravelGuideTests` 가 패키지로 갔고, Tuist 스킴은 SPM 테스트 타깃을 참조할 수 없습니다.
+`App` Scheme 은 테스트를 물지 않습니다 — 물고 있던 `CoreTravelGuideTests` 가 패키지로 갔고, Tuist Scheme 은 SPM 테스트 타깃을 참조할 수 없습니다.
 
 ## API 키 설정
 
-AeroDataBox(RapidAPI) 키는 F부터 동일하게 주입합니다. 위치도 그대로 `Projects/App/Secrets.local.xcconfig` 입니다 — `Configurations/{Debug,Release}.xcconfig` 가 상대 경로로 `#include?` 합니다.
+AeroDataBox(RapidAPI) 키는 F부터 동일하게 주입합니다. 위치도 그대로 `Projects/App/Secrets.local.xcconfig` 입니다 — `Configurations/{Debug,Staging,Production}.xcconfig` 가 상대 경로로 `#include?` 합니다.
 
 ```
 RAPIDAPI_KEY = your_rapidapi_key
@@ -308,14 +334,14 @@ make generate
 | | |
 |---|---|
 | `make generate` | 플러그인 해석 → `sync` → 프로젝트 생성 |
-| `make sync` | 디렉터리에서 모듈·타깃 선언을 생성하고 검사 |
+| `make sync` | 디렉터리에서 모듈 · 타깃 · Scheme 선언을 생성 |
 | `make open` | 생성 후 Xcode 로 열기 |
 | `make clean` | 생성물(`.xcodeproj` · `.xcworkspace` · `Derived`)만 삭제 |
-| `make test` | 패키지(`swift test`) + 앱 스킴 테스트 |
-| `make module NAME=Payment LAYER=Feature` | 모듈 뼈대 생성 |
+| `make test` | 패키지(`swift test`) + 앱 Scheme 테스트 |
+| `make module` | 모듈 뼈대 생성 |
 
 
-`App` 은 전체 앱, `Feature*Example` 은 그 모듈만 링크한 단독 앱입니다.
+`App` 은 전체 앱, `Example*` 은 그 모듈만 링크한 단독 앱입니다.
 
 ## Project A-Z
 
