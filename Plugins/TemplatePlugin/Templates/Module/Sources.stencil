@@ -1,4 +1,4 @@
 import Foundation
 
 // {{ layer }}{{ name }} — 구현.
-// 의존성은 Plugins/TargetPlugin/ProjectDescriptionHelpers/Module.swift 에 선언합니다.
+// 의존성은 Plugins/TargetPlugin/ProjectDescriptionHelpers/Dependencies.swift 에 선언합니다.

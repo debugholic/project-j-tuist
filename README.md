@@ -49,7 +49,7 @@ Plugins/                                  ← 서로를 모릅니다
 Tuist/ProjectDescriptionHelpers/          ← 플러그인을 import 해 조합하는 유일한 층
 ├── Environment.swift                     이 프로젝트의 ProjectEnvironment 값
 ├── Component+Target.swift                Component + 환경값 → Target
-├── Project+Module.swift                  모듈 프로젝트 · Feature 프로젝트 팩토리
+├── Project+Module.swift                  모듈 프로젝트 팩토리
 └── Scheme+Workspace.swift                워크스페이스 스킴 팩토리
 
 Projects/<Layer>/<Module>/Project.swift   모듈마다 한 줄
@@ -94,7 +94,7 @@ Projects/Feature/Trip/
 └── Example/Sources        ← I 에서 별도 .xcodeproj 였던 것
 ```
 
-`Project.swift` 는 한 줄입니다. 타깃 구성은 `Module.swift` 의 선언에서 나옵니다.
+`Project.swift` 는 한 줄입니다. 타깃 구성은 디렉터리 스캔 결과(`.generated/Modules.swift`)에서 나옵니다.
 
 ```swift
 let project = Project.module("Domain/Trip")
@@ -126,7 +126,7 @@ I의 README는 이렇게 적어뒀습니다: "`swift test` 는 쓸 수 없습니
 | `Shared/Common` | Foundation | `Package/` |
 | `Shared/DesignSystem` | **UIKit** · ObjectiveC | `Projects/` |
 
-이 넷은 `Module.swift` 상 **바깥으로 나가는 의존성이 하나도 없습니다.** SPM 패키지는 Tuist 타깃을 볼 수 없지만 반대는 되므로, 닫힌 집합이라 그대로 떼어낼 수 있습니다.
+이 넷은 `Dependencies.swift` 상 **바깥으로 나가는 의존성이 하나도 없습니다.** SPM 패키지는 Tuist 타깃을 볼 수 없지만 반대는 되므로, 닫힌 집합이라 그대로 떼어낼 수 있습니다.
 
 ```
 Package/Package.swift    Core 3 + SharedCommon(+Testing) + CoreTravelGuideTests

@@ -23,8 +23,8 @@ open:
 # 생성물만 지웁니다. 소스와 매니페스트는 건드리지 않습니다.
 clean:
 	tuist clean
-	find . -name '*.xcodeproj' -maxdepth 3 -exec rm -rf {} +
-	find . -name 'Derived' -maxdepth 3 -type d -exec rm -rf {} +
+	find . -maxdepth 4 -name '*.xcodeproj' -exec rm -rf {} +
+	find . -maxdepth 4 -name 'Derived' -type d -exec rm -rf {} +
 	rm -rf ProjectJ.xcworkspace Tuist/Plugins
 	rm -rf Package/.build
 	rm -rf Plugins/TargetPlugin/ProjectDescriptionHelpers/.generated
@@ -48,7 +48,7 @@ test-app:
 module:
 	@test -n "$(NAME)" || (echo "NAME 이 필요합니다 — 예: make module NAME=Payment LAYER=Feature"; exit 1)
 	tuist scaffold Module --name $(NAME) --layer $(or $(LAYER),Feature)
-	@echo "의존성은 Plugins/TargetPlugin/ProjectDescriptionHelpers/Module.swift 에 추가하세요."
+	@echo "의존성은 Plugins/TargetPlugin/ProjectDescriptionHelpers/Dependencies.swift 에 추가하세요."
 
 help:
 	@echo "generate  플러그인 해석 + sync + 프로젝트 생성 (clone 직후 이것부터)"
